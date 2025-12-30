@@ -34,7 +34,7 @@
 
 1. 克隆仓库
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/hubcodemke/svgfix
    cd svgfix
    ```
 
@@ -121,7 +121,6 @@ MIT License
 
 - 在开发模式下，应用运行在本地开发服务器上
 - 生产构建会生成独立的桌面应用
-- Tauri 应用的拖拽功能需要在 `tauri.conf.json` 中设置 `dragDropEnabled: false` 才能正常工作
 
 ### 代码规范
 
