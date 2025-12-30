@@ -132,7 +132,7 @@ onUnmounted(() => {
   transition: all 0.3s ease;
   background-color: #f8fafc;
   cursor: pointer;
-  margin: 20px 0;
+  margin: 0 0 20px;
   min-height: 120px;
 }
 

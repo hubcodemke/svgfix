@@ -556,8 +556,8 @@ body {
 
 .left-panel {
   flex: 1;
-  min-width: 200px;
-  max-width: 250px;
+  min-width: 150px;
+  max-width: 200px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -565,7 +565,7 @@ body {
 
 .right-panel {
   flex: 2;
-  min-width: 550px;
+  min-width: 500px;
   display: flex;
   flex-direction: column;
 }

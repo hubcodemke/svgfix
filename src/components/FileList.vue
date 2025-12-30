@@ -1,5 +1,12 @@
 <template>
   <div class="file-list-container">
+    <!-- 导入的SVG预览弹窗组件 -->
+    <svg-preview-modal
+      v-model="previewModalVisible"
+      :src="previewSrc"
+      :title="previewTitle"
+    />
+    
     <!-- 固定头部 -->
     <div class="file-list-header">
       <!-- 文件数量警告 -->
@@ -67,10 +74,12 @@
                 <div class="svg-preview">
                   <div v-if="file.content" class="svg-preview-inner">
                     <img 
-                      :src="'data:image/svg+xml;utf8,' + encodeURIComponent(file.content)" 
-                      alt="Original SVG" 
-                      class="svg-img"
-                    />
+                    :src="'data:image/svg+xml;utf8,' + encodeURIComponent(file.content)" 
+                    alt="Original SVG" 
+                    class="svg-img"
+                    @click="openPreviewModal('data:image/svg+xml;utf8,' + encodeURIComponent(file.content), file.name + ' (原图)')"
+                    style="cursor: pointer;"
+                  />
                   </div>
                   <a-icon v-else type="file-svg" :style="{ fontSize: '32px', color: '#6366f1' }" />
                 </div>
@@ -86,6 +95,8 @@
                       :src="'data:image/svg+xml;utf8,' + encodeURIComponent(file.processedContent)" 
                       alt="Processed SVG" 
                       class="svg-img"
+                      @click="openPreviewModal('data:image/svg+xml;utf8,' + encodeURIComponent(file.processedContent), file.name + ' (处理后)')"
+                      style="cursor: pointer;"
                     />
                   </div>
                 </div>
@@ -167,6 +178,7 @@
 
 <script setup>
 import { ref, computed } from 'vue';
+import SvgPreviewModal from './SvgPreviewModal.vue';
 
 const props = defineProps({
   files: {
@@ -188,6 +200,18 @@ const props = defineProps({
 });
 
 defineEmits(['process-all', 'clear-all', 'download-file', 'download-all', 'file-selected']);
+
+// SVG预览弹窗状态
+const previewModalVisible = ref(false);
+const previewTitle = ref('');
+const previewSrc = ref('');
+
+// 打开SVG预览弹窗
+const openPreviewModal = (src, title) => {
+  previewSrc.value = src;
+  previewTitle.value = title;
+  previewModalVisible.value = true;
+};
 
 // 分页相关状态
 const currentPage = ref(1);
@@ -247,6 +271,7 @@ const formatFileSize = (bytes) => {
 .file-list-header {
   background: white;
   padding: 12px 20px 0 20px;
+  border-radius: 12px 12px 0 0;
   z-index: 10;
   position: sticky;
   top: 0;
@@ -381,6 +406,8 @@ const formatFileSize = (bytes) => {
   align-items: center;
   justify-content: center;
 }
+
+
 
 /* 文件信息区域 */
 .file-info {
