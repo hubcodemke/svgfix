@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'  # 改为 npm，避免缓存问题
+          skip-cache: true  # 避免 lock file 警告
 
       - name: Install pnpm globally
         run: npm install -g pnpm
