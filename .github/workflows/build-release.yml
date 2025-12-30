@@ -1,0 +1,114 @@
+name: Build and Release Tauri App (Windows + macOS)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Read version from package.json
+        id: get_version
+        run: |
+          $version = (Get-Content -Path package.json | ConvertFrom-Json).version
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          skip-cache: true
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Build Tauri Windows app
+        run: pnpm tauri build
+
+      - name: Find .exe file
+        id: find_exe
+        run: |
+          $file = Get-ChildItem -Path src-tauri\target\release\bundle\nsis\ -Filter "*.exe" | Select-Object -First 1
+          echo "exe_path=$($file.FullName)" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: ${{ steps.find_exe.outputs.exe_path }}
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin,aarch64-apple-darwin
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          skip-cache: true
+
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build frontend
+        run: pnpm run build
+
+      - name: Build Tauri macOS app
+        run: pnpm tauri build
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: bundles
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build-windows.outputs.version }}
+          name: Release v${{ needs.build-windows.outputs.version }}
+          draft: false
+          prerelease: false
+          files: |
+            bundles/windows-installer/*.exe
+            bundles/macos-dmg/*.dmg
