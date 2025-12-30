@@ -16,11 +16,11 @@ jobs:
         with:
           targets: x86_64-pc-windows-msvc
 
-      - name: Install Node.js and pnpm
+      - name: Install Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'pnpm'
+          cache: 'npm'  # 改为 npm，避免缓存问题
 
       - name: Install pnpm globally
         run: npm install -g pnpm
