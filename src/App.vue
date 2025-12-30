@@ -3,9 +3,49 @@ import { ref } from 'vue';
 import { open } from '@tauri-apps/plugin-dialog';
 import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
 import { downloadDir } from '@tauri-apps/api/path';
+import { Modal, message } from 'ant-design-vue';
 import DropZone from './components/DropZone.vue';
 import FileList from './components/FileList.vue';
-import SvgPreview from './components/SvgPreview.vue';
+
+// 弹窗状态
+const modalVisible = ref(false);
+const modalTitle = ref('');
+const modalContent = ref('');
+const modalOkText = ref('确定');
+const modalCancelText = ref('取消');
+const modalOnOk = ref(null);
+const modalOnCancel = ref(null);
+
+// 显示弹窗
+const showModal = (options) => {
+  modalTitle.value = options.title || '提示';
+  modalContent.value = options.content || '';
+  modalOkText.value = options.okText || '确定';
+  modalCancelText.value = options.cancelText || '取消';
+  modalOnOk.value = options.onOk || (() => {});
+  modalOnCancel.value = options.onCancel || (() => {});
+  modalVisible.value = true;
+};
+
+// 关闭弹窗
+const handleModalOk = () => {
+  if (modalOnOk.value) {
+    modalOnOk.value();
+  }
+  modalVisible.value = false;
+};
+
+const handleModalCancel = () => {
+  if (modalOnCancel.value) {
+    modalOnCancel.value();
+  }
+  modalVisible.value = false;
+};
+
+// 简化的消息提示
+const showMessage = (content, type = 'info') => {
+  message[type](content);
+};
 
 // 文件列表
 const files = ref([]);
@@ -38,14 +78,7 @@ const showConfigMessage = ref(false);
 
 // 显示配置消息
 const showConfigFeedback = (message, type = 'success') => {
-  configMessage.value = message;
-  configMessageType.value = type;
-  showConfigMessage.value = true;
-  
-  // 3秒后自动隐藏
-  setTimeout(() => {
-    showConfigMessage.value = false;
-  }, 3000);
+  showMessage(message, type);
 };
 
 // 下载状态管理
@@ -55,9 +88,10 @@ const isDownloading = ref(false);
 let idCounter = 0;
 
 // 处理文件选择
-const handleFilesSelected = (selectedFiles) => {
-  selectedFiles.forEach(file => {
-    files.value.push({
+const handleFilesSelected = async (selectedFiles) => {
+  for (const file of selectedFiles) {
+    // 创建文件对象
+    const fileItem = {
       id: `file-${++idCounter}-${Date.now()}`,
       name: file.name,
       size: file.size,
@@ -65,12 +99,49 @@ const handleFilesSelected = (selectedFiles) => {
       status: 'pending',
       content: null,
       processedContent: null
-    });
-  });
+    };
+    
+    // 添加到列表
+    files.value.push(fileItem);
+    
+    // 立即读取文件内容用于预览
+    try {
+      const reader = new FileReader();
+      const content = await new Promise((resolve, reject) => {
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        reader.readAsText(file);
+      });
+      
+      // 验证是否为有效的SVG
+      if (isValidSvg(content)) {
+        fileItem.content = content;
+      } else {
+        fileItem.status = 'error';
+        showMessage(`文件 ${file.name} 不是有效的SVG文件`, 'error');
+      }
+    } catch (error) {
+      console.error('Error reading file content:', error);
+      fileItem.status = 'error';
+      showMessage(`读取文件 ${file.name} 失败: ${error.message}`, 'error');
+    }
+  }
   
   // 如果是第一个文件，自动选中
-  if (files.value.length === 1) {
+  if (files.value.length === selectedFiles.length) {
     selectedFile.value = files.value[0];
+  }
+};
+
+// 验证SVG格式
+const isValidSvg = (content) => {
+  try {
+    // 简单的SVG验证：检查是否包含<svg>标签
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(content, 'image/svg+xml');
+    return svgDoc.getElementsByTagName('svg').length > 0;
+  } catch (error) {
+    return false;
   }
 };
 
@@ -217,22 +288,10 @@ const downloadFile = async (fileItem) => {
     
     console.log('文件下载成功:', filename);
     // 添加下载成功提示
-    alert(`文件下载成功: ${filename}\n保存位置: ${savePath}`);
+    showMessage(`文件下载成功: ${filename}`, 'success');
   } catch (error) {
     console.error('Error downloading file:', error);
-    alert(`下载文件失败: ${error.message || '未知错误'}`);
-  }
-};
-
-// 验证SVG格式
-const isValidSvg = (content) => {
-  try {
-    // 简单的SVG验证：检查是否包含<svg>标签
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(content, 'image/svg+xml');
-    return svgDoc.getElementsByTagName('svg').length > 0;
-  } catch (error) {
-    return false;
+    showMessage(`下载文件失败: ${error.message || '未知错误'}`, 'error');
   }
 };
 
@@ -267,7 +326,7 @@ const downloadAllFiles = async () => {
   
   const completedFiles = files.value.filter(file => file.status === 'completed');
   if (completedFiles.length === 0) {
-    alert('没有已完成处理的文件可以下载');
+    showMessage('没有已完成处理的文件可以下载', 'warning');
     return;
   }
   
@@ -322,11 +381,11 @@ const downloadAllFiles = async () => {
     }
     
     // 批量下载成功提示
-    alert(`批量下载完成：成功保存 ${successCount} 个文件到文件夹\n${targetFolder}`);
+    showMessage(`批量下载完成：成功保存 ${successCount} 个文件到文件夹`, 'success');
     
   } catch (error) {
     console.error('Error in batch download:', error);
-    alert(`批量下载失败: ${error.message || '未知错误'}`);
+    showMessage(`批量下载失败: ${error.message || '未知错误'}`, 'error');
   } finally {
     isDownloading.value = false;
   }
@@ -349,127 +408,68 @@ const selectFileForPreview = (fileItem) => {
       <!-- 左侧面板 -->
       <div class="left-panel">
         <!-- 选项设置 -->
-        <div class="options-panel">
-          <h3>处理选项</h3>
+        <a-card title="处理选项" :bordered="false" class="options-panel" size="small">
           <div class="options-grid">
-            <label class="option-item">
-              <input 
-                type="checkbox" 
-                v-model="options.removeFill"
-              />
-              <span>移除填充色 (fill)</span>
-            </label>
-            <label class="option-item">
-              <input 
-                type="checkbox" 
-                v-model="options.removeStroke"
-              />
-              <span>移除描边色 (stroke)</span>
-            </label>
-            <label class="option-item">
-              <input 
-                type="checkbox" 
-                v-model="options.removeColor"
-              />
-              <span>移除颜色属性 (color)</span>
-            </label>
-            <label class="option-item">
-              <input 
-                type="checkbox" 
-                v-model="options.preserveBlack"
-              />
-              <span>保留黑色 (#000)</span>
-            </label>
-            <label class="option-item">
-              <input 
-                type="checkbox" 
-                v-model="options.preserveWhite"
-              />
-              <span>保留白色 (#fff)</span>
-            </label>
-            <label class="option-item">
-            <input 
-              type="checkbox" 
-              v-model="options.preserveTransparent"
-            />
-            <span>保留透明色</span>
-          </label>
-          <label class="option-item">
-            <input 
-              type="checkbox" 
-              v-model="options.modifyFilename"
-            />
-            <span>修改文件名 (添加 -cleaned 后缀)</span>
-          </label>
+            <a-checkbox v-model="options.removeFill">移除填充色 (fill)</a-checkbox>
+            <a-checkbox v-model="options.removeStroke">移除描边色 (stroke)</a-checkbox>
+            <a-checkbox v-model="options.removeColor">移除颜色属性 (color)</a-checkbox>
+            <a-checkbox v-model="options.preserveBlack">保留黑色 (#000)</a-checkbox>
+            <a-checkbox v-model="options.preserveWhite">保留白色 (#fff)</a-checkbox>
+            <a-checkbox v-model="options.preserveTransparent">保留透明色</a-checkbox>
+            <a-checkbox v-model="options.modifyFilename">修改文件名 (添加 -cleaned 后缀)</a-checkbox>
           </div>
-        </div>
+        </a-card>
         
         <!-- 下载文件夹配置 -->
-        <div class="options-panel">
-          <h3>下载设置</h3>
+        <a-card title="下载设置" :bordered="false" class="options-panel" size="small">
           <div class="download-folder-config">
-            <div class="config-item">
-              <label class="config-label">默认下载文件夹</label>
-              <div class="config-content">
-                <div class="folder-path-display">
-                  <span v-if="options.downloadFolder" class="folder-path">{{ options.downloadFolder }}</span>
-                  <span v-else class="folder-path-empty">未设置</span>
-                </div>
-                <div class="config-actions">
-                  <button 
-                    class="btn btn-primary btn-sm"
-                    @click="selectDownloadFolder"
-                    :disabled="isSavingConfig"
-                  >
-                    <span v-if="isSavingConfig" class="loading-spinner-small"></span>
-                    {{ isSavingConfig ? '设置中...' : '选择文件夹' }}
-                  </button>
-                  <button 
-                    class="btn btn-secondary btn-sm"
-                    @click="clearDownloadFolder"
-                    :disabled="!options.downloadFolder || isSavingConfig"
-                  >
-                    清除
-                  </button>
-                </div>
-              </div>
+            <div class="config-label">默认下载文件夹</div>
+            <div class="folder-path-display">
+              <span 
+                class="folder-path"
+                :class="{ 'folder-path-empty': !options.downloadFolder }"
+                style="font-family: monospace; font-size: 13px; word-break: break-all; white-space: pre-wrap;"
+              >
+                {{ options.downloadFolder || '未设置' }}
+              </span>
+            </div>
+            <div class="config-actions" style="display: flex; gap: 8px; margin-top: 8px;">
+              <a-button 
+                type="primary" 
+                size="small"
+                @click="selectDownloadFolder"
+                :loading="isSavingConfig"
+              >
+                选择文件夹
+              </a-button>
+              <a-button 
+                size="small"
+                @click="clearDownloadFolder"
+                :disabled="!options.downloadFolder || isSavingConfig"
+              >
+                清除
+              </a-button>
             </div>
           </div>
-          
-          <!-- 配置消息提示 -->
-          <div 
-            v-if="showConfigMessage" 
-            class="config-message" 
-            :class="configMessageType"
-          >
-            {{ configMessage }}
-          </div>
-        </div>
-        
-        <!-- 文件拖放区域 -->
-        <DropZone @files-selected="handleFilesSelected" />
-        
-        <!-- 文件列表 -->
-      <FileList 
-        :files="files" 
-        :is-processing="isProcessing"
-        :is-downloading="isDownloading"
-        :selected-file-id="selectedFile?.id || ''"
-        @process-all="processAllFiles"
-        @clear-all="clearAllFiles"
-        @download-file="downloadFile"
-        @download-all="downloadAllFiles"
-        @file-selected="selectFileForPreview"
-      />
+        </a-card>
       </div>
       
       <!-- 右侧面板 -->
       <div class="right-panel">
-        <!-- SVG预览 -->
-        <SvgPreview 
-          :files="files"
+        <!-- 文件拖放区域 -->
+        <DropZone @files-selected="handleFilesSelected" />
+        
+        <!-- 文件列表 -->
+        <FileList 
+          :files="files" 
+          :is-processing="isProcessing"
+          :is-downloading="isDownloading"
           :selected-file-id="selectedFile?.id || ''"
-          @select-file="selectFileForPreview"
+          @process-all="processAllFiles"
+          @clear-all="clearAllFiles"
+          @download-file="downloadFile"
+          @download-all="downloadAllFiles"
+          @file-selected="selectFileForPreview"
         />
       </div>
     </main>
@@ -478,6 +478,23 @@ const selectFileForPreview = (fileItem) => {
       <p>SVG颜色清理工具 © 2024</p>
     </footer>
   </div>
+  
+  <!-- Ant Design Vue Modal组件 -->
+  <a-modal
+    v-model:open="modalVisible"
+    :title="modalTitle"
+    :ok-text="modalOkText"
+    :cancel-text="modalCancelText"
+    @ok="handleModalOk"
+    @cancel="handleModalCancel"
+    :centered="true"
+    :maskClosable="false"
+    :closeIcon="null"
+  >
+    <div class="modal-content">
+      {{ modalContent }}
+    </div>
+  </a-modal>
 </template>
 
 <style>
@@ -539,8 +556,8 @@ body {
 
 .left-panel {
   flex: 1;
-  min-width: 350px;
-  max-width: 400px;
+  min-width: 200px;
+  max-width: 250px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -548,7 +565,7 @@ body {
 
 .right-panel {
   flex: 2;
-  min-width: 400px;
+  min-width: 550px;
   display: flex;
   flex-direction: column;
 }
@@ -787,10 +804,21 @@ input[type="checkbox"] {
   transition: all 0.2s ease;
 }
 
+/* 优化面板样式 */
+.options-panel {
+  margin-bottom: 20px;
+}
+
+/* 选项网格布局 */
+.options-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
 /* 优化面板阴影效果 */
 .options-panel,
 .file-list-container,
-.svg-preview-container,
 .drop-zone {
   transition: all 0.3s ease;
 }
