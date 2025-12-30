@@ -1,9 +1,11 @@
 <script setup>
 import { ref } from 'vue';
+import { open } from '@tauri-apps/plugin-dialog';
+import { writeTextFile, mkdir } from '@tauri-apps/plugin-fs';
+import { downloadDir } from '@tauri-apps/api/path';
 import DropZone from './components/DropZone.vue';
 import FileList from './components/FileList.vue';
 import SvgPreview from './components/SvgPreview.vue';
-import { cleanSvgColors, isValidSvg } from './utils/svgCleaner';
 
 // 文件列表
 const files = ref([]);
@@ -18,8 +20,33 @@ const options = ref({
   preserveBlack: false,
   preserveWhite: false,
   preserveTransparent: false,
-  modifyFilename: true // 是否修改文件名的选项
+  modifyFilename: true, // 是否修改文件名的选项
+  downloadFolder: localStorage.getItem('downloadFolder') || '' // 下载文件夹路径
 });
+
+// 初始化检查：确保下载文件夹不是根目录或空值
+if (!options.value.downloadFolder || options.value.downloadFolder === '/') {
+  options.value.downloadFolder = '';
+  localStorage.removeItem('downloadFolder');
+}
+
+// 配置相关状态
+const isSavingConfig = ref(false);
+const configMessage = ref('');
+const configMessageType = ref(''); // 'success' or 'error'
+const showConfigMessage = ref(false);
+
+// 显示配置消息
+const showConfigFeedback = (message, type = 'success') => {
+  configMessage.value = message;
+  configMessageType.value = type;
+  showConfigMessage.value = true;
+  
+  // 3秒后自动隐藏
+  setTimeout(() => {
+    showConfigMessage.value = false;
+  }, 3000);
+};
 
 // 下载状态管理
 const isDownloading = ref(false);
@@ -106,62 +133,200 @@ const clearAllFiles = () => {
   selectedFile.value = null;
 };
 
+// 选择下载文件夹
+const selectDownloadFolder = async () => {
+  try {
+    isSavingConfig.value = true;
+    
+    // 打开文件夹选择对话框
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '选择默认下载文件夹'
+    });
+    
+    // 处理Tauri v2的返回格式
+    const folderPath = Array.isArray(selected) ? selected[0] : selected;
+    
+    if (folderPath && folderPath !== '/') {
+      // 更新选项和本地存储
+      options.value.downloadFolder = folderPath;
+      localStorage.setItem('downloadFolder', folderPath);
+      
+      showConfigFeedback('下载文件夹设置成功！');
+    } else if (folderPath === '/') {
+      showConfigFeedback('根目录无法作为下载文件夹，请选择其他文件夹', 'error');
+    }
+  } catch (error) {
+    console.error('Error selecting download folder:', error);
+    showConfigFeedback('设置下载文件夹失败：' + (error.message || '未知错误'), 'error');
+  } finally {
+    isSavingConfig.value = false;
+  }
+};
+
+// 清除下载文件夹设置
+const clearDownloadFolder = () => {
+  options.value.downloadFolder = '';
+  localStorage.removeItem('downloadFolder');
+  showConfigFeedback('已清除默认下载文件夹设置');
+};
+
 // 下载单个文件
 const downloadFile = async (fileItem) => {
   if (!fileItem.processedContent) return;
   
+  console.log('开始下载单个文件:', fileItem.name);
+  
   try {
-    // 转换处理后的内容为Blob
-    const blob = new Blob([fileItem.processedContent], { type: 'image/svg+xml' });
-    
-    // 创建下载链接
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
     // 根据选项决定是否修改文件名
     const filename = options.value.modifyFilename 
       ? fileItem.name.replace('.svg', '-cleaned.svg') 
       : fileItem.name;
-    link.download = filename;
     
-    // 触发下载
-    document.body.appendChild(link);
-    link.click();
+    console.log('生成的文件名:', filename);
     
-    // 清理
-    setTimeout(() => {
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 100);
+    let savePath;
+    let folderPath;
+    
+    // 检查是否设置了有效的默认下载文件夹
+    if (options.value.downloadFolder && options.value.downloadFolder !== '/') {
+      // 使用设置的下载文件夹
+      folderPath = options.value.downloadFolder;
+      savePath = `${folderPath}/${filename}`;
+      console.log('使用设置的下载文件夹:', savePath);
+    } else {
+      // 没有设置默认下载文件夹或下载文件夹无效，使用系统默认下载位置
+      folderPath = await downloadDir();
+      savePath = `${folderPath}/${filename}`;
+      console.log('使用系统默认下载文件夹:', savePath);
+    }
+    
+    // 确保下载文件夹存在
+    try {
+      await mkdir(folderPath, { recursive: true });
+      console.log('下载文件夹已确保存在:', folderPath);
+    } catch (dirError) {
+      console.error('创建文件夹失败:', dirError);
+      alert(`创建下载文件夹失败: ${dirError.message || '未知错误'}`);
+      return;
+    }
+    
+    // 使用Tauri的文件系统API保存文件
+    await writeTextFile(savePath, fileItem.processedContent);
+    
+    console.log('文件下载成功:', filename);
+    // 添加下载成功提示
+    alert(`文件下载成功: ${filename}\n保存位置: ${savePath}`);
   } catch (error) {
     console.error('Error downloading file:', error);
-    alert(`下载文件失败: ${error.message}`);
+    alert(`下载文件失败: ${error.message || '未知错误'}`);
   }
+};
+
+// 验证SVG格式
+const isValidSvg = (content) => {
+  try {
+    // 简单的SVG验证：检查是否包含<svg>标签
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(content, 'image/svg+xml');
+    return svgDoc.getElementsByTagName('svg').length > 0;
+  } catch (error) {
+    return false;
+  }
+};
+
+// 清理SVG颜色
+const cleanSvgColors = (content, options) => {
+  let cleanedContent = content;
+  
+  // 移除fill属性
+  if (options.removeFill) {
+    cleanedContent = cleanedContent.replace(/\sfill="[^"]*"/g, '');
+    cleanedContent = cleanedContent.replace(/\sfill='[^']*'/g, '');
+  }
+  
+  // 移除stroke属性
+  if (options.removeStroke) {
+    cleanedContent = cleanedContent.replace(/\sstroke="[^"]*"/g, '');
+    cleanedContent = cleanedContent.replace(/\sstroke='[^']*'/g, '');
+  }
+  
+  // 移除color属性
+  if (options.removeColor) {
+    cleanedContent = cleanedContent.replace(/\scolor="[^"]*"/g, '');
+    cleanedContent = cleanedContent.replace(/\scolor='[^']*'/g, '');
+  }
+  
+  return cleanedContent;
 };
 
 // 批量下载文件
 const downloadAllFiles = async () => {
+  console.log('开始批量下载');
+  
   const completedFiles = files.value.filter(file => file.status === 'completed');
   if (completedFiles.length === 0) {
     alert('没有已完成处理的文件可以下载');
     return;
   }
   
+  console.log('已完成处理的文件数量:', completedFiles.length);
+  
   try {
     isDownloading.value = true;
     
-    // 由于浏览器限制，批量下载会逐个触发下载
-    for (const file of completedFiles) {
-      await downloadFile(file);
-      // 等待100ms，避免浏览器阻止连续下载
-      await new Promise(resolve => setTimeout(resolve, 100));
+    let targetFolder;
+    
+    // 检查是否设置了有效的默认下载文件夹
+    if (options.value.downloadFolder && options.value.downloadFolder !== '/') {
+      // 使用设置的下载文件夹
+      targetFolder = options.value.downloadFolder;
+      console.log('使用设置的下载文件夹:', targetFolder);
+    } else {
+      // 没有设置默认下载文件夹或下载文件夹无效，使用系统默认下载位置
+      targetFolder = await downloadDir();
+      console.log('使用系统默认下载文件夹:', targetFolder);
     }
     
-    alert(`已开始下载 ${completedFiles.length} 个文件`);
+    // 确保下载文件夹存在
+    try {
+      await mkdir(targetFolder, { recursive: true });
+      console.log('下载文件夹已确保存在:', targetFolder);
+    } catch (dirError) {
+      console.error('创建文件夹失败:', dirError);
+      alert(`创建下载文件夹失败: ${dirError.message || '未知错误'}`);
+      return;
+    }
+    
+    // 逐个保存文件到选择的文件夹
+    let successCount = 0;
+    for (const file of completedFiles) {
+      try {
+        // 根据选项决定是否修改文件名
+        const filename = options.value.modifyFilename 
+          ? file.name.replace('.svg', '-cleaned.svg') 
+          : file.name;
+        
+        const filePath = `${targetFolder}/${filename}`;
+        console.log('保存文件到:', filePath);
+        
+        // 使用Tauri的文件系统API保存文件
+        await writeTextFile(filePath, file.processedContent);
+        
+        successCount++;
+        console.log('文件保存成功:', filename);
+      } catch (fileError) {
+        console.error(`保存文件失败 ${file.name}:`, fileError);
+      }
+    }
+    
+    // 批量下载成功提示
+    alert(`批量下载完成：成功保存 ${successCount} 个文件到文件夹\n${targetFolder}`);
+    
   } catch (error) {
     console.error('Error in batch download:', error);
-    alert(`批量下载失败: ${error.message}`);
+    alert(`批量下载失败: ${error.message || '未知错误'}`);
   } finally {
     isDownloading.value = false;
   }
@@ -236,6 +401,48 @@ const selectFileForPreview = (fileItem) => {
             />
             <span>修改文件名 (添加 -cleaned 后缀)</span>
           </label>
+          </div>
+        </div>
+        
+        <!-- 下载文件夹配置 -->
+        <div class="options-panel">
+          <h3>下载设置</h3>
+          <div class="download-folder-config">
+            <div class="config-item">
+              <label class="config-label">默认下载文件夹</label>
+              <div class="config-content">
+                <div class="folder-path-display">
+                  <span v-if="options.downloadFolder" class="folder-path">{{ options.downloadFolder }}</span>
+                  <span v-else class="folder-path-empty">未设置</span>
+                </div>
+                <div class="config-actions">
+                  <button 
+                    class="btn btn-primary btn-sm"
+                    @click="selectDownloadFolder"
+                    :disabled="isSavingConfig"
+                  >
+                    <span v-if="isSavingConfig" class="loading-spinner-small"></span>
+                    {{ isSavingConfig ? '设置中...' : '选择文件夹' }}
+                  </button>
+                  <button 
+                    class="btn btn-secondary btn-sm"
+                    @click="clearDownloadFolder"
+                    :disabled="!options.downloadFolder || isSavingConfig"
+                  >
+                    清除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 配置消息提示 -->
+          <div 
+            v-if="showConfigMessage" 
+            class="config-message" 
+            :class="configMessageType"
+          >
+            {{ configMessage }}
           </div>
         </div>
         
@@ -332,7 +539,7 @@ body {
 
 .left-panel {
   flex: 1;
-  min-width: 320px;
+  min-width: 350px;
   max-width: 400px;
   display: flex;
   flex-direction: column;
@@ -478,6 +685,98 @@ html {
   animation: fadeIn 0.5s ease-out;
 }
 
+/* 下载文件夹配置样式 */
+.download-folder-config {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.config-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.config-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.folder-path-display {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.folder-path {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  color: #3b82f6;
+  word-break: break-all;
+  white-space: pre-wrap;
+  overflow: visible;
+  text-overflow: unset;
+}
+
+.folder-path-empty {
+  font-style: italic;
+  color: #94a3b8;
+}
+
+.config-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.loading-spinner-small {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: white;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.config-message {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  animation: fadeIn 0.3s ease;
+}
+
+.config-message.success {
+  background: #ecfdf5;
+  color: #10b981;
+  border: 1px solid #d1fae5;
+}
+
+.config-message.error {
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+}
+
 /* 优化按钮过渡效果 */
 button {
   transition: all 0.2s ease;
@@ -506,6 +805,48 @@ input[type="checkbox"] {
   ::selection {
     background: rgba(99, 102, 241, 0.3);
     color: #a5b4fc;
+  }
+  
+  /* 深色主题下的下载配置样式 */
+  .config-label {
+    color: #f8fafc;
+  }
+  
+  .config-content {
+    background: #334155;
+    border-color: #475569;
+  }
+  
+  .folder-path {
+    color: #60a5fa;
+  }
+  
+  .folder-path-empty {
+    color: #cbd5e1;
+  }
+  
+  .config-message.success {
+    background: #0f1f17;
+    color: #10b981;
+    border: 1px solid #164e36;
+  }
+  
+  .config-message.error {
+    background: #2c1818;
+    color: #ef4444;
+    border: 1px solid #4c1d1d;
+  }
+}
+
+/* 动画效果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>

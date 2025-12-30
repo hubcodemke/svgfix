@@ -1,106 +1,27 @@
 <template>
   <div class="file-list-container">
     <h3 class="file-list-title">文件列表</h3>
-    <div v-if="files.length === 0" class="empty-state">
-      <p>暂无文件，请拖拽或选择SVG文件</p>
-    </div>
-    <div v-else class="file-list">
-      <div 
-        v-for="file in files" 
-        :key="file.id" 
-        class="file-item"
-        :class="{ 'processing': file.status === 'processing', 'completed': file.status === 'completed', 'error': file.status === 'error', 'selected': selectedFileId === file.id }"
-        @click="$emit('file-selected', file)"
+    
+    <!-- 文件数量警告 -->
+    <div v-if="files.length > 500" class="file-count-warning">
+      <svg 
+        class="warning-icon"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
       >
-        <div class="file-info">
-          <svg 
-            class="file-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" />
-            <line x1="16" y1="17" x2="8" y2="17" />
-            <polyline points="10 9 9 9 8 9" />
-          </svg>
-          <div class="file-details">
-            <div class="file-name">{{ file.name }}</div>
-            <div class="file-size">{{ formatFileSize(file.size) }}</div>
-          </div>
-        </div>
-        <div class="file-status">
-          <div v-if="file.status === 'pending'" class="status pending">
-            <span class="status-indicator"></span>
-            等待处理
-          </div>
-          <div v-else-if="file.status === 'processing'" class="status processing">
-            <span class="status-indicator loading"></span>
-            处理中
-          </div>
-          <div v-else-if="file.status === 'completed'" class="status completed">
-            <svg 
-              class="status-icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            已完成
-          </div>
-          <div v-else-if="file.status === 'error'" class="status error">
-            <svg 
-              class="status-icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <circle cx="12" cy="12" r="10" />
-              <line x1="15" y1="9" x2="9" y2="15" />
-              <line x1="9" y1="9" x2="15" y2="15" />
-            </svg>
-            处理失败
-          </div>
-        </div>
-        <button 
-          v-if="file.status === 'completed'" 
-          class="download-btn"
-          @click.stop="$emit('download-file', file)"
-          :disabled="isDownloading"
-        >
-          <svg 
-            class="btn-icon"
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          <span v-if="isDownloading" class="btn-loading"></span>
-          {{ isDownloading ? '下载中' : '下载' }}
-        </button>
-      </div>
+        <circle cx="12" cy="12" r="10" />
+        <line x1="12" y1="8" x2="12" y2="12" />
+        <line x1="12" y1="16" x2="12.01" y2="16" />
+      </svg>
+      <span>文件数量已超过500个，仅显示前500个文件</span>
     </div>
+    
+    <!-- 操作按钮行 - 移到文件列表之前 -->
     <div v-if="files.length > 0" class="file-list-footer">
       <div class="file-count">{{ files.length }} 个文件</div>
       <div class="action-buttons">
@@ -128,11 +49,133 @@
         </button>
       </div>
     </div>
+    
+    <div v-if="files.length === 0" class="empty-state">
+      <p>暂无文件，请拖拽或选择SVG文件</p>
+    </div>
+    <div v-else class="file-list-wrapper">
+      <div class="file-list">
+        <div 
+          v-for="file in displayFiles" 
+          :key="file.id" 
+          class="file-item"
+          :class="{ 'processing': file.status === 'processing', 'completed': file.status === 'completed', 'error': file.status === 'error', 'selected': selectedFileId === file.id }"
+          @click="$emit('file-selected', file)"
+        >
+          <div class="file-info">
+            <svg 
+              class="file-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+            <div class="file-details">
+              <div class="file-name">{{ file.name }}</div>
+              <div class="file-size">{{ formatFileSize(file.size) }}</div>
+            </div>
+          </div>
+          <div class="file-status">
+            <div v-if="file.status === 'pending'" class="status pending">
+              <span class="status-indicator"></span>
+              等待处理
+            </div>
+            <div v-else-if="file.status === 'processing'" class="status processing">
+              <span class="status-indicator loading"></span>
+              处理中
+            </div>
+            <div v-else-if="file.status === 'completed'" class="status completed">
+              <svg 
+                class="status-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              已完成
+            </div>
+            <div v-else-if="file.status === 'error'" class="status error">
+              <svg 
+                class="status-icon"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+              处理失败
+            </div>
+          </div>
+          <button 
+            v-if="file.status === 'completed'" 
+            class="download-btn"
+            @click.stop="$emit('download-file', file)"
+            :disabled="isDownloading"
+          >
+            <svg 
+              class="btn-icon"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span v-if="isDownloading" class="btn-loading"></span>
+            {{ isDownloading ? '下载中' : '下载' }}
+          </button>
+        </div>
+      </div>
+      
+      <!-- 分页控制 -->
+      <div v-if="files.length > 100" class="pagination">
+        <button 
+          class="btn btn-secondary btn-sm"
+          @click="currentPage = Math.max(1, currentPage - 1)"
+          :disabled="currentPage === 1"
+        >
+          上一页
+        </button>
+        <span class="page-info">第 {{ currentPage }} 页，共 {{ totalPages }} 页</span>
+        <button 
+          class="btn btn-secondary btn-sm"
+          @click="currentPage = Math.min(totalPages, currentPage + 1)"
+          :disabled="currentPage === totalPages"
+        >
+          下一页
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
   files: {
@@ -154,6 +197,28 @@ const props = defineProps({
 });
 
 defineEmits(['process-all', 'clear-all', 'download-file', 'download-all', 'file-selected']);
+
+// 分页相关状态
+const currentPage = ref(1);
+const pageSize = ref(100);
+
+// 计算要显示的文件列表（最多显示500个文件）
+const displayFiles = computed(() => {
+  // 限制最多显示500个文件
+  const maxFiles = props.files.slice(0, 500);
+  
+  // 计算分页
+  const startIndex = (currentPage.value - 1) * pageSize.value;
+  const endIndex = startIndex + pageSize.value;
+  
+  return maxFiles.slice(startIndex, endIndex);
+});
+
+// 计算总页数
+const totalPages = computed(() => {
+  const maxFiles = Math.min(props.files.length, 500);
+  return Math.ceil(maxFiles / pageSize.value);
+});
 
 const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes';
@@ -188,11 +253,63 @@ const formatFileSize = (bytes) => {
   border-radius: 8px;
 }
 
+.file-list-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
 .file-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  margin-bottom: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 文件数量警告样式 */
+.file-count-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.warning-icon {
+  width: 16px;
+  height: 16px;
+  color: #f59e0b;
+}
+
+.file-count-warning span {
+  font-size: 14px;
+  color: #d97706;
+}
+
+/* 分页样式 */
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.page-info {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
 }
 
 .file-item {
@@ -375,6 +492,7 @@ const formatFileSize = (bytes) => {
   align-items: center;
   padding-top: 20px;
   border-top: 1px solid #e2e8f0;
+  margin-bottom: 20px;
 }
 
 .file-count {
