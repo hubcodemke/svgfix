@@ -1,11 +1,9 @@
 name: Build Tauri Windows App
 
 on:
-  # 手动触发（推荐测试用）
-  workflow_dispatch:
-  # 或 push 到 main 分支时自动构建
+  workflow_dispatch:  # 允许手动触发
   # push:
-  #   branches: [main]
+  #   branches: [main]  # 可选：推送到 main 时自动构建
 
 jobs:
   build-windows:
@@ -17,26 +15,33 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
 
-      - name: Install Node.js
+      - name: Install Node.js and pnpm
         uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'pnpm'  # 或 pnpm / yarn
+          cache: 'pnpm'
+
+      - name: Install pnpm globally
+        run: npm install -g pnpm
 
       - name: Install frontend dependencies
-        run: pnpm install  # 改成 pnpm install 或 yarn 如果你用别的
+        run: pnpm install
 
-      - name: Build frontend (React/Vue/etc.)
-        run: pnpm run build  # 确保这会生成 dist/ 或 public/ 目录
+      - name: Build frontend (Vite)
+        run: pnpm run build
 
-      - name: Install Tauri CLI and build Windows app
-        run: |
-          pnpm install --save-dev @tauri-apps/cli
-          npx tauri build
+      - name: Build Tauri Windows app
+        run: pnpm tauri build
+        env:
+          # 可选：如果你以后要签名，可以在这里加证书变量
+          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
 
-      - name: Upload Windows installer as artifact
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-windows-installer
+          name: svgclean-windows-installer
           path: src-tauri/target/release/bundle/nsis/*.exe
