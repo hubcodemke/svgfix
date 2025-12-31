@@ -66,6 +66,14 @@
 
 完成以上步骤后，应用将成功启动，后续打开时可以直接双击。
 
+如上面方式还不行，可以用终端输入，执行完就可以了。
+
+```bash
+xattr -rd com.apple.quarantine /Applications/svgclean.app
+```
+
+
+
 ## 构建说明
 
 ### 构建特定平台版本
