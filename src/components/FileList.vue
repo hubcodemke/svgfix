@@ -322,6 +322,8 @@ const formatFileSize = (bytes) => {
   transition: all 0.2s ease;
   cursor: pointer;
   height: auto;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .file-list-item:hover {
@@ -339,36 +341,42 @@ const formatFileSize = (bytes) => {
 .file-svg-container {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-right: 16px;
+  gap: 8px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 /* SVG部分 */
 .svg-section {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 /* SVG标签 */
 .svg-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #64748b;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* 连接箭头 */
 .svg-arrow {
-  font-size: 16px;
+  font-size: 14px;
   color: #6366f1;
   font-weight: 600;
-  margin: 0 4px;
+  margin: 0 2px;
+  flex-shrink: 0;
 }
 
 /* SVG预览样式 */
 .svg-preview {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   background: white;
   border-radius: 4px;
   overflow: hidden;
@@ -377,6 +385,7 @@ const formatFileSize = (bytes) => {
   justify-content: center;
   position: relative;
   border: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 /* 处理后的图特殊样式 */
@@ -412,36 +421,42 @@ const formatFileSize = (bytes) => {
 /* 文件信息区域 */
 .file-info {
   flex: 1;
-  margin-right: 16px;
+  margin-right: 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* 文件名称 */
 .file-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #1e293b;
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 300px;
+  max-width: 100%;
+  flex-shrink: 1;
 }
 
 /* 文件大小 */
 .file-size {
-  font-size: 12px;
+  font-size: 11px;
   color: #64748b;
+  white-space: nowrap;
 }
 
 /* 文件状态 */
 .file-status {
-  margin-right: 16px;
+  margin-right: 12px;
+  flex-shrink: 0;
 }
 
 /* 文件操作按钮 */
 .file-actions {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 /* 文件列表底部样式 - 固定效果 */
@@ -501,23 +516,67 @@ const formatFileSize = (bytes) => {
 }
 
 /* 响应式设计 */
+@media (max-width: 1024px) {
+  .file-name {
+    font-size: 13px;
+  }
+  
+  .file-size {
+    font-size: 11px;
+  }
+  
+  .file-svg-container {
+    gap: 6px;
+    margin-right: 8px;
+  }
+  
+  .svg-section {
+    gap: 3px;
+  }
+  
+  .svg-label {
+    font-size: 11px;
+  }
+  
+  .svg-preview {
+    width: 24px;
+    height: 24px;
+  }
+}
+
 @media (max-width: 768px) {
   .file-list-item {
     flex-wrap: wrap;
-    gap: 12px;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  
+  .file-svg-container {
+    width: 100%;
+    justify-content: flex-start;
+    order: 0;
   }
   
   .file-info {
     flex: 1;
-    min-width: 150px;
+    min-width: 120px;
+    margin-right: 0;
+    order: 1;
   }
   
   .file-name {
+    font-size: 13px;
     max-width: 100%;
   }
   
   .file-status {
-    margin-right: auto;
+    margin-right: 0;
+    order: 2;
+  }
+  
+  .file-actions {
+    order: 3;
+    margin-left: auto;
   }
   
   .file-list-footer-sticky {
@@ -535,21 +594,46 @@ const formatFileSize = (bytes) => {
   }
 }
 
-/* 文件名称样式 */
-.file-name {
-  font-weight: 500;
-  color: #1e293b;
-  font-size: 14px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 300px;
-}
-
-/* 文件大小样式 */
-.file-size {
-  font-size: 12px;
-  color: #64748b;
+@media (max-width: 480px) {
+  .file-list-container {
+    min-height: 300px;
+    max-height: 500px;
+  }
+  
+  .file-list-item {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  
+  .file-svg-container {
+    gap: 4px;
+  }
+  
+  .svg-label {
+    display: none;
+  }
+  
+  .svg-preview {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .file-name {
+    font-size: 12px;
+  }
+  
+  .file-size {
+    font-size: 10px;
+  }
+  
+  .action-buttons {
+    gap: 6px;
+  }
+  
+  .a-button {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
 }
 
 /* 深色主题支持 */
