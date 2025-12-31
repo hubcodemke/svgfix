@@ -21,6 +21,17 @@
 - **后端语言**：Rust
 - **UI 组件**：Ant Design Vue
 
+## 界面
+
+![应用界面](docs/macos-main.png)
+![应用界面](docs/macos-main-selected.png)
+![应用界面](docs/macos-main-change.png)
+![应用界面](docs/macos-main-change-modal-1.png)
+![应用界面](docs/macos-main-change-modal-2.png)
+
+
+
+
 ## 安装和使用
 
 ### 环境要求
