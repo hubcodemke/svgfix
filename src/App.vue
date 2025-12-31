@@ -51,6 +51,9 @@ const showMessage = (content, type = "info") => {
 const files = ref([]);
 const isProcessing = ref(false);
 const selectedFile = ref(null);
+// 处理进度
+const processedCount = ref(0);
+const totalFilesToProcess = ref(0);
 
 // 处理选项
 const options = ref({
@@ -187,15 +190,21 @@ const processAllFiles = async () => {
   if (files.value.length === 0) return;
 
   isProcessing.value = true;
+  // 初始化进度
+  const filesToProcess = files.value.filter(file => file.status === "pending" || file.status === "error");
+  totalFilesToProcess.value = filesToProcess.length;
+  processedCount.value = 0;
 
   // 按顺序处理文件
-  for (const file of files.value) {
-    if (file.status === "pending" || file.status === "error") {
-      await processFile(file);
-    }
+  for (const file of filesToProcess) {
+    await processFile(file);
+    processedCount.value++;
   }
 
   isProcessing.value = false;
+  // 重置进度状态
+  totalFilesToProcess.value = 0;
+  processedCount.value = 0;
 };
 
 // 清空所有文件
@@ -504,6 +513,8 @@ const selectFileForPreview = (fileItem) => {
           :is-processing="isProcessing"
           :is-downloading="isDownloading"
           :selected-file-id="selectedFile?.id || ''"
+          :processed-count="processedCount"
+          :total-files-to-process="totalFilesToProcess"
           @process-all="processAllFiles"
           @clear-all="clearAllFiles"
           @download-file="downloadFile"

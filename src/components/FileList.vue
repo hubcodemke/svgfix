@@ -6,42 +6,49 @@
       :src="previewSrc"
       :title="previewTitle"
     />
-    
+
     <!-- 固定头部 -->
     <div class="file-list-header">
-      <!-- 文件数量警告 -->
-      <a-alert 
-        v-if="files.length > 500" 
-        message="文件数量已超过500个，仅显示前500个文件" 
-        type="warning" 
-        show-icon 
-        style="margin-bottom: 16px;"
-      />
+      <!-- 处理进度条 -->
+      <div v-if="isProcessing" class="process-progress">
+        <a-progress 
+          :percent="totalFilesToProcess > 0 ? Math.round((processedCount / totalFilesToProcess) * 100) : 0" 
+          :stroke-width="6"
+          :show-info="true"
+          :style="{ width: '100%' }"
+        />
+      </div>
       
+      <!-- 文件数量警告 -->
+      <a-alert
+        v-if="files.length > 500"
+        message="文件数量已超过500个，仅显示前500个文件"
+        type="warning"
+        show-icon
+        style="margin-bottom: 16px"
+      />
+
       <!-- 操作按钮行 - 固钉效果 -->
       <div v-if="files.length > 0" class="file-list-footer-sticky">
         <div class="file-count">{{ files.length }} 个文件</div>
         <div class="action-buttons">
-          <a-button 
-            type="default" 
-            @click="$emit('clear-all')"
-            size="small"
-          >
-            清空列表
-          </a-button>
-          <a-button 
-            type="primary" 
+          <a-button
+            type="primary"
             @click="$emit('process-all')"
             :loading="isProcessing"
+            :disabled="isDownloading"
             size="small"
           >
             开始处理
           </a-button>
-          <a-button 
-            type="success" 
+          <a-button type="default" @click="$emit('clear-all')" size="small" :disabled="isProcessing || isDownloading">
+            清空列表
+          </a-button>
+          <a-button
+            type="success"
             @click="$emit('download-all')"
             :loading="isDownloading"
-            :disabled="files.filter(f => f.status === 'completed').length === 0"
+            :disabled="(files.filter((f) => f.status === 'completed').length === 0) || isProcessing || isDownloading"
             size="small"
           >
             批量下载
@@ -49,21 +56,21 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 可滚动内容区 -->
     <div class="file-list-content">
       <div v-if="files.length === 0" class="empty-state">
         <a-empty description="暂无文件，请拖拽或选择SVG文件" />
       </div>
-      
+
       <div v-else class="files-container">
         <!-- 使用ul li实现单列文件列表 -->
         <ul class="file-list">
-          <li 
-            v-for="file in displayFiles" 
-            :key="file.id" 
+          <li
+            v-for="file in displayFiles"
+            :key="file.id"
             class="file-list-item"
-            :class="{ 'selected': selectedFileId === file.id }"
+            :class="{ selected: selectedFileId === file.id }"
             @click="$emit('file-selected', file)"
           >
             <!-- SVG图标区域：原图和处理后图 -->
@@ -73,36 +80,58 @@
                 <span class="svg-label">原图：</span>
                 <div class="svg-preview">
                   <div v-if="file.content" class="svg-preview-inner">
-                    <img 
-                    :src="'data:image/svg+xml;utf8,' + encodeURIComponent(file.content)" 
-                    alt="Original SVG" 
-                    class="svg-img"
-                    @click="openPreviewModal('data:image/svg+xml;utf8,' + encodeURIComponent(file.content), file.name + ' (原图)')"
-                    style="cursor: pointer;"
-                  />
+                    <img
+                      :src="
+                        'data:image/svg+xml;utf8,' +
+                        encodeURIComponent(file.content)
+                      "
+                      alt="Original SVG"
+                      class="svg-img"
+                      @click="
+                        openPreviewModal(
+                          'data:image/svg+xml;utf8,' +
+                            encodeURIComponent(file.content),
+                          file.name + ' (原图)'
+                        )
+                      "
+                      style="cursor: pointer"
+                    />
                   </div>
-                  <a-icon v-else type="file-svg" :style="{ fontSize: '32px', color: '#6366f1' }" />
+                  <a-icon
+                    v-else
+                    type="file-svg"
+                    :style="{ fontSize: '32px', color: '#6366f1' }"
+                  />
                 </div>
               </div>
-              
+
               <!-- 连接符号和处理后部分 -->
               <template v-if="file.processedContent">
                 <div class="svg-arrow">→</div>
                 <div class="svg-section processed">
                   <span class="svg-label">处理后：</span>
                   <div class="svg-preview processed">
-                    <img 
-                      :src="'data:image/svg+xml;utf8,' + encodeURIComponent(file.processedContent)" 
-                      alt="Processed SVG" 
+                    <img
+                      :src="
+                        'data:image/svg+xml;utf8,' +
+                        encodeURIComponent(file.processedContent)
+                      "
+                      alt="Processed SVG"
                       class="svg-img"
-                      @click="openPreviewModal('data:image/svg+xml;utf8,' + encodeURIComponent(file.processedContent), file.name + ' (处理后)')"
-                      style="cursor: pointer;"
+                      @click="
+                        openPreviewModal(
+                          'data:image/svg+xml;utf8,' +
+                            encodeURIComponent(file.processedContent),
+                          file.name + ' (处理后)'
+                        )
+                      "
+                      style="cursor: pointer"
                     />
                   </div>
                 </div>
               </template>
             </div>
-            
+
             <!-- 文件信息 -->
             <div class="file-info">
               <a-tooltip :title="file.name" placement="top">
@@ -110,18 +139,18 @@
               </a-tooltip>
               <div class="file-size">{{ formatFileSize(file.size) }}</div>
             </div>
-            
+
             <!-- 处理状态 -->
             <div class="file-status">
-              <a-tag 
-                v-if="file.status === 'pending'" 
+              <a-tag
+                v-if="file.status === 'pending'"
                 color="default"
                 size="small"
               >
                 等待处理
               </a-tag>
-              <a-tag 
-                v-else-if="file.status === 'processing'" 
+              <a-tag
+                v-else-if="file.status === 'processing'"
                 color="warning"
                 size="small"
               >
@@ -130,27 +159,27 @@
                 </template>
                 处理中
               </a-tag>
-              <a-tag 
-                v-else-if="file.status === 'completed'" 
+              <a-tag
+                v-else-if="file.status === 'completed'"
                 color="success"
                 size="small"
               >
                 已完成
               </a-tag>
-              <a-tag 
-                v-else-if="file.status === 'error'" 
+              <a-tag
+                v-else-if="file.status === 'error'"
                 color="error"
                 size="small"
               >
                 处理失败
               </a-tag>
             </div>
-            
+
             <!-- 下载按钮 -->
             <div class="file-actions">
-              <a-button 
-                v-if="file.status === 'completed'" 
-                type="primary" 
+              <a-button
+                v-if="file.status === 'completed'"
+                type="primary"
                 size="small"
                 @click.stop="$emit('download-file', file)"
                 :loading="isDownloading"
@@ -160,15 +189,15 @@
             </div>
           </li>
         </ul>
-        
+
         <!-- 分页控制 -->
-        <a-pagination 
-          v-if="files.length > 100" 
-          :current="currentPage" 
-          :total="Math.min(files.length, 500)" 
-          :page-size="pageSize" 
+        <a-pagination
+          v-if="files.length > 100"
+          :current="currentPage"
+          :total="Math.min(files.length, 500)"
+          :page-size="pageSize"
           @change="handlePageChange"
-          style="margin-top: 16px; text-align: center;"
+          style="margin-top: 16px; text-align: center"
           size="small"
         />
       </div>
@@ -177,34 +206,48 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
-import SvgPreviewModal from './SvgPreviewModal.vue';
+import { ref, computed } from "vue";
+import SvgPreviewModal from "./SvgPreviewModal.vue";
 
 const props = defineProps({
   files: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   isProcessing: {
     type: Boolean,
-    default: false
+    default: false,
   },
   isDownloading: {
     type: Boolean,
-    default: false
+    default: false,
   },
   selectedFileId: {
     type: String,
-    default: ''
-  }
+    default: "",
+  },
+  processedCount: {
+    type: Number,
+    default: 0,
+  },
+  totalFilesToProcess: {
+    type: Number,
+    default: 0,
+  },
 });
 
-defineEmits(['process-all', 'clear-all', 'download-file', 'download-all', 'file-selected']);
+defineEmits([
+  "process-all",
+  "clear-all",
+  "download-file",
+  "download-all",
+  "file-selected",
+]);
 
 // SVG预览弹窗状态
 const previewModalVisible = ref(false);
-const previewTitle = ref('');
-const previewSrc = ref('');
+const previewTitle = ref("");
+const previewSrc = ref("");
 
 // 打开SVG预览弹窗
 const openPreviewModal = (src, title) => {
@@ -221,11 +264,11 @@ const pageSize = ref(100);
 const displayFiles = computed(() => {
   // 限制最多显示500个文件
   const maxFiles = props.files.slice(0, 500);
-  
+
   // 计算分页
   const startIndex = (currentPage.value - 1) * pageSize.value;
   const endIndex = startIndex + pageSize.value;
-  
+
   return maxFiles.slice(startIndex, endIndex);
 });
 
@@ -235,11 +278,11 @@ const handlePageChange = (page) => {
 };
 
 const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 </script>
 
@@ -275,6 +318,9 @@ const formatFileSize = (bytes) => {
   z-index: 10;
   position: sticky;
   top: 0;
+  box-sizing: border-box;
+  width: 100%;
+  overflow: visible;
 }
 
 /* 可滚动内容区 */
@@ -416,8 +462,6 @@ const formatFileSize = (bytes) => {
   justify-content: center;
 }
 
-
-
 /* 文件信息区域 */
 .file-info {
   flex: 1;
@@ -459,6 +503,15 @@ const formatFileSize = (bytes) => {
   flex-shrink: 0;
 }
 
+/* 处理进度条样式 */
+.process-progress {
+  margin: 0 0 16px 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  margin-left: 0;
+}
+
 /* 文件列表底部样式 - 固定效果 */
 .file-list-footer-sticky {
   display: flex;
@@ -483,33 +536,33 @@ const formatFileSize = (bytes) => {
     background: #1e293b;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   }
-  
+
   .file-list-header {
     background: #1e293b;
     border-bottom-color: #475569;
   }
-  
+
   .file-list-item {
     background: #1e293b;
     border-color: #475569;
   }
-  
+
   .file-name {
     color: #f8fafc;
   }
-  
+
   .file-size {
     color: #cbd5e1;
   }
-  
+
   .svg-preview {
     background: #334155;
   }
-  
+
   .file-count {
     color: #cbd5e1;
   }
-  
+
   .file-list-footer-sticky {
     border-bottom-color: #475569;
   }
@@ -520,24 +573,24 @@ const formatFileSize = (bytes) => {
   .file-name {
     font-size: 13px;
   }
-  
+
   .file-size {
     font-size: 11px;
   }
-  
+
   .file-svg-container {
     gap: 6px;
     margin-right: 8px;
   }
-  
+
   .svg-section {
     gap: 3px;
   }
-  
+
   .svg-label {
     font-size: 11px;
   }
-  
+
   .svg-preview {
     width: 24px;
     height: 24px;
@@ -550,45 +603,45 @@ const formatFileSize = (bytes) => {
     gap: 10px;
     padding: 10px 12px;
   }
-  
+
   .file-svg-container {
     width: 100%;
     justify-content: flex-start;
     order: 0;
   }
-  
+
   .file-info {
     flex: 1;
     min-width: 120px;
     margin-right: 0;
     order: 1;
   }
-  
+
   .file-name {
     font-size: 13px;
     max-width: 100%;
   }
-  
+
   .file-status {
     margin-right: 0;
     order: 2;
   }
-  
+
   .file-actions {
     order: 3;
     margin-left: auto;
   }
-  
+
   .file-list-footer-sticky {
     flex-direction: column;
     gap: 12px;
     align-items: stretch;
   }
-  
+
   .action-buttons {
     justify-content: center;
   }
-  
+
   .file-count {
     text-align: center;
   }
@@ -599,37 +652,37 @@ const formatFileSize = (bytes) => {
     min-height: 300px;
     max-height: 500px;
   }
-  
+
   .file-list-item {
     padding: 8px 10px;
     gap: 8px;
   }
-  
+
   .file-svg-container {
     gap: 4px;
   }
-  
+
   .svg-label {
     display: none;
   }
-  
+
   .svg-preview {
     width: 20px;
     height: 20px;
   }
-  
+
   .file-name {
     font-size: 12px;
   }
-  
+
   .file-size {
     font-size: 10px;
   }
-  
+
   .action-buttons {
     gap: 6px;
   }
-  
+
   .a-button {
     padding: 4px 8px;
     font-size: 12px;
@@ -641,11 +694,11 @@ const formatFileSize = (bytes) => {
   .file-name {
     color: #f8fafc;
   }
-  
+
   .file-size {
     color: #cbd5e1;
   }
-  
+
   .svg-preview {
     background: #334155;
   }
