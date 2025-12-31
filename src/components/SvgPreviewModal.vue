@@ -9,56 +9,93 @@
       @after-open-change="handleModalOpenChange"
     >
     <div class="preview-modal-content">
-      <!-- 缩放控制 -->
+      <!-- 控制区域 -->
       <div class="zoom-controls">
-        <span class="zoom-info">缩放比例: {{ Math.round(zoomLevel * 100) }}%</span>
-        <div class="zoom-buttons">
+        <!-- 缩放信息只在视图模式显示 -->
+        <span v-if="!isSourceMode" class="zoom-info">缩放比例: {{ Math.round(zoomLevel * 100) }}%</span>
+        
+        <!-- 控制按钮 -->
+        <div class="control-buttons">
+          <!-- 缩放按钮只在视图模式显示 -->
+          <div v-if="!isSourceMode" class="zoom-buttons">
+            <a-button 
+              size="small" 
+              @click="zoomOut" 
+              :disabled="zoomLevel <= 0.5"
+              type="default"
+              style="min-width: 40px;"
+            >
+              - <!-- 使用文字替代图标 -->
+            </a-button>
+            <a-button 
+              size="small" 
+              @click="resetZoom"
+              type="default"
+            >
+              重置
+            </a-button>
+            <a-button 
+              size="small" 
+              @click="zoomIn" 
+              :disabled="zoomLevel >= 1.5"
+              type="default"
+              style="min-width: 40px;"
+            >
+              + <!-- 使用文字替代图标 -->
+            </a-button>
+          </div>
+          
+          <!-- 视图/源码切换按钮 -->
           <a-button 
             size="small" 
-            @click="zoomOut" 
-            :disabled="zoomLevel <= 0.5"
-            type="default"
-            style="min-width: 40px;"
+            @click="toggleDisplayMode"
+            :type="isSourceMode ? 'default' : 'primary'"
           >
-            - <!-- 使用文字替代图标 -->
+            {{ isSourceMode ? '视图' : '源码' }}
           </a-button>
+          
+          <!-- 源码模式下显示复制按钮 -->
           <a-button 
+            v-if="isSourceMode" 
             size="small" 
-            @click="resetZoom"
-            type="default"
+            @click="copySvgSource"
+            type="primary"
+            icon="copy"
+            style="margin-left: 8px;"
           >
-            重置
-          </a-button>
-          <a-button 
-            size="small" 
-            @click="zoomIn" 
-            :disabled="zoomLevel >= 1.5"
-            type="default"
-            style="min-width: 40px;"
-          >
-            + <!-- 使用文字替代图标 -->
+            复制
           </a-button>
         </div>
       </div>
       
-      <!-- 预览图片 -->
-      <div 
-        class="preview-img-container"
-        @wheel.prevent="handleWheelZoom"
-      >
-        <img 
-          :src="src" 
-          alt="SVG Preview" 
-          class="preview-modal-img"
-          :style="{ transform: `scale(${zoomLevel})`, transition: 'transform 0.05s ease' }"
-        />
-      </div>
+      <!-- 预览内容：根据模式切换显示 -->
+      <template v-if="!isSourceMode">
+        <!-- 预览图片 -->
+        <div 
+          class="preview-img-container"
+          @wheel.prevent="handleWheelZoom"
+        >
+          <img 
+            :src="src" 
+            alt="SVG Preview" 
+            class="preview-modal-img"
+            :style="{ transform: `scale(${zoomLevel})`, transition: 'transform 0.05s ease' }"
+          />
+        </div>
+      </template>
+      <template v-else>
+        <!-- 源码视图 -->
+        <div class="preview-source-container">
+          <pre class="source-pre"><code class="source-code">{{ svgSource }}</code></pre>
+        </div>
+      </template>
     </div>
   </a-modal>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
+import { message } from 'ant-design-vue';
 
 // Props
 const props = defineProps({
@@ -82,14 +119,52 @@ const emit = defineEmits(['update:modelValue']);
 // 缩放级别状态
 const zoomLevel = ref(1);
 
+// 显示模式状态：'view' 或 'source'
+const displayMode = ref('view');
+
+// SVG源码
+const svgSource = ref('');
+
+// 计算属性：是否为源码模式
+const isSourceMode = computed(() => displayMode.value === 'source');
+
+// 解析SVG源码
+const parseSvgSource = (src) => {
+  try {
+    if (src.startsWith('data:image/svg+xml;utf8,')) {
+      // 从Data URL中提取编码的SVG内容
+      const encodedSvg = src.replace('data:image/svg+xml;utf8,', '');
+      // 解码SVG内容
+      svgSource.value = decodeURIComponent(encodedSvg);
+    } else {
+      // 如果不是Data URL，尝试直接使用（可能是其他格式，这里做简单处理）
+      svgSource.value = src;
+    }
+  } catch (error) {
+    console.error('解析SVG源码时出错:', error);
+    svgSource.value = '解析SVG源码失败，请检查文件格式';
+  }
+};
+
+// 监听src变化，解析SVG源码
+watch(() => props.src, (newSrc) => {
+  parseSvgSource(newSrc);
+}, { immediate: true });
+
 // 监听弹窗可见性变化
 watch(() => props.modelValue, (newVal) => {
   if (newVal) {
     zoomLevel.value = 1.5; // 打开时初始化为150%
   } else {
     zoomLevel.value = 1; // 关闭时重置缩放级别
+    displayMode.value = 'view'; // 关闭时重置为视图模式
   }
 });
+
+// 切换显示模式
+const toggleDisplayMode = () => {
+  displayMode.value = isSourceMode.value ? 'view' : 'source';
+};
 
 // 放大
 const zoomIn = () => {
@@ -124,7 +199,74 @@ const handleWheelZoom = (event) => {
 const handleModalOpenChange = (open) => {
   if (!open) {
     zoomLevel.value = 1; // 关闭时重置缩放级别
+    displayMode.value = 'view'; // 关闭时重置为视图模式
     emit('update:modelValue', false);
+  }
+};
+
+// 复制SVG源码
+const copySvgSource = () => {
+  try {
+    // 尝试使用现代浏览器的Clipboard API
+    if (navigator.clipboard && window.isSecureContext) {
+      // 使用Clipboard API
+      navigator.clipboard.writeText(svgSource.value)
+        .then(() => {
+          message.success('复制成功');
+        })
+        .catch(err => {
+          console.error('Clipboard API复制失败:', err);
+          // 回退到传统方法
+          fallbackCopyTextToClipboard(svgSource.value);
+        });
+    } else {
+      // 不支持Clipboard API，使用传统方法
+      fallbackCopyTextToClipboard(svgSource.value);
+    }
+  } catch (error) {
+    console.error('解析或复制SVG源码时出错:', error);
+    message.error('复制失败，请手动复制');
+  }
+};
+
+// 传统的复制方法，作为fallback
+const fallbackCopyTextToClipboard = (text) => {
+  try {
+    // 创建临时textarea元素
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    
+    // 设置样式，确保元素不可见但可选中
+    textArea.style.position = 'fixed';
+    textArea.style.top = '0';
+    textArea.style.left = '0';
+    textArea.style.width = '2em';
+    textArea.style.height = '2em';
+    textArea.style.padding = '0';
+    textArea.style.border = 'none';
+    textArea.style.outline = 'none';
+    textArea.style.boxShadow = 'none';
+    textArea.style.background = 'transparent';
+    
+    // 添加到DOM并选中内容
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    // 执行复制命令
+    const successful = document.execCommand('copy');
+    
+    // 移除临时元素
+    document.body.removeChild(textArea);
+    
+    if (successful) {
+      message.success('复制成功');
+    } else {
+      message.error('复制失败，请手动复制');
+    }
+  } catch (err) {
+    console.error('传统方法复制失败:', err);
+    message.error('复制失败，请手动复制');
   }
 };
 </script>
@@ -153,6 +295,12 @@ const handleModalOpenChange = (open) => {
   font-size: 14px;
   font-weight: 500;
   color: #334155;
+}
+
+.control-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .zoom-buttons {
@@ -189,23 +337,57 @@ const handleModalOpenChange = (open) => {
   border-radius: 4px;
 }
 
+/* 源码视图容器样式 */
+.preview-source-container {
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  padding: 16px;
+  overflow: hidden;
+}
+
+/* 源码pre样式 */
+.source-pre {
+  margin: 0;
+  padding: 16px;
+  background: #f6f8fa;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 300px;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* 源码code样式 */
+.source-code {
+  color: #24292e;
+  tab-size: 2;
+}
+
 /* 优化滚动条样式 */
-.preview-img-container::-webkit-scrollbar {
+.preview-img-container::-webkit-scrollbar,
+.source-pre::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
-.preview-img-container::-webkit-scrollbar-track {
+.preview-img-container::-webkit-scrollbar-track,
+.source-pre::-webkit-scrollbar-track {
   background: #f1f5f9;
   border-radius: 4px;
 }
 
-.preview-img-container::-webkit-scrollbar-thumb {
+.preview-img-container::-webkit-scrollbar-thumb,
+.source-pre::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 4px;
 }
 
-.preview-img-container::-webkit-scrollbar-thumb:hover {
+.preview-img-container::-webkit-scrollbar-thumb:hover,
+.source-pre::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
 
@@ -227,15 +409,31 @@ const handleModalOpenChange = (open) => {
     background: #334155;
   }
   
-  .preview-img-container::-webkit-scrollbar-track {
+  .preview-source-container {
+    background: #334155;
+  }
+  
+  .source-pre {
+    background: #1e293b;
+    border: 1px solid #475569;
+  }
+  
+  .source-code {
+    color: #e2e8f0;
+  }
+  
+  .preview-img-container::-webkit-scrollbar-track,
+  .source-pre::-webkit-scrollbar-track {
     background: #475569;
   }
   
-  .preview-img-container::-webkit-scrollbar-thumb {
+  .preview-img-container::-webkit-scrollbar-thumb,
+  .source-pre::-webkit-scrollbar-thumb {
     background: #64748b;
   }
   
-  .preview-img-container::-webkit-scrollbar-thumb:hover {
+  .preview-img-container::-webkit-scrollbar-thumb:hover,
+  .source-pre::-webkit-scrollbar-thumb:hover {
     background: #94a3b8;
   }
 }
