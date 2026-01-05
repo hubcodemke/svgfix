@@ -1,12 +1,13 @@
 # SVG颜色清理桌面应用
 
-一个基于 Tauri + Vue 3 开发的 SVG 颜色清理桌面应用，支持批量处理 SVG 文件，将其中的 fill 和 stroke 属性统一设置为 `currentColor`，方便在不同主题下使用。
+一个基于 Tauri + Vue 3 开发的 SVG 颜色清理桌面应用，支持批量处理 SVG 文件，智能识别图标类型并将颜色属性统一设置为 `currentColor`，方便在不同主题下使用。
 
 ## 主要功能
 
 - **拖拽上传**：支持将 SVG 文件拖拽到应用窗口进行处理
 - **批量处理**：一次性处理多个 SVG 文件
-- **颜色统一**：将 SVG 元素的 fill 和 stroke 属性统一设置为 `currentColor`
+- **智能图标识别**：自动识别线性图标和面性图标，应用不同的处理规则
+- **颜色统一**：将 SVG 元素的颜色属性统一设置为 `currentColor`
 - **批量下载**：处理完成后可批量下载所有文件
 - **预览功能**：支持查看处理前后的 SVG 效果
 - **文件名修改**：提供选项可以修改输出文件名
@@ -28,7 +29,6 @@
 ![应用界面](docs/macos-main-change.png)
 ![应用界面](docs/macos-main-change-modal-1.png)
 ![应用界面](docs/macos-main-change-modal-2.png)
-
 
 
 
@@ -62,8 +62,10 @@
 ### 使用方法
 
 1. 启动应用后，将 SVG 文件拖拽到应用窗口的拖拽区域
-2. 等待文件处理完成
-3. 可以选择修改输出文件名
+2. 应用会自动智能处理所有 SVG 文件：
+   - **线性图标**：确保 `fill="none"`，将 `stroke="#xxx"` 替换为 `stroke="currentColor"`
+   - **面性图标**：将 `fill="#xxx"` 替换为 `fill="currentColor"`，`stroke="#xxx"` 替换为 `stroke="currentColor"`
+3. 可以选择修改输出文件名（添加 -cleaned 后缀）
 4. 点击"批量下载"按钮下载处理后的文件
 5. 可以在预览区域查看处理前后的效果
 
@@ -126,7 +128,7 @@ pnpm build:all
 │   ├── components/           # Vue 组件
 │   │   ├── DropZone.vue      # 拖拽区域组件
 │   │   ├── FileList.vue      # 文件列表组件
-│   │   └── SvgPreview.vue    # SVG 预览组件
+│   │   └── SvgPreviewModal.vue # SVG 预览组件
 │   ├── utils/                # 工具函数
 │   │   └── svgCleaner.js     # SVG 清理逻辑
 │   ├── App.vue               # 主应用组件

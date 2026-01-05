@@ -58,12 +58,6 @@ const totalFilesToProcess = ref(0);
 
 // 处理选项
 const options = ref({
-  removeFill: true,
-  removeStroke: true,
-  removeColor: true,
-  preserveBlack: false,
-  preserveWhite: false,
-  preserveTransparent: false,
   modifyFilename: true, // 是否修改文件名的选项
   downloadFolder: localStorage.getItem("downloadFolder") || "", // 下载文件夹路径
 });
@@ -159,7 +153,7 @@ const processFile = async (fileItem) => {
     }
 
     // 清理SVG颜色
-    const cleanedContent = cleanSvgColors(content, options.value);
+    const cleanedContent = cleanSvgColors(content);
     fileItem.processedContent = cleanedContent;
 
     fileItem.status = "completed";
@@ -395,24 +389,6 @@ const selectFileForPreview = (fileItem) => {
           size="small"
         >
           <div class="options-grid">
-            <a-checkbox v-model:checked="options.removeFill"
-              >移除填充色 (fill)</a-checkbox
-            >
-            <a-checkbox v-model:checked="options.removeStroke"
-              >移除描边色 (stroke)</a-checkbox
-            >
-            <a-checkbox v-model:checked="options.removeColor"
-              >移除颜色属性 (color)</a-checkbox
-            >
-            <a-checkbox v-model:checked="options.preserveBlack"
-              >保留黑色 (#000)</a-checkbox
-            >
-            <a-checkbox v-model:checked="options.preserveWhite"
-              >保留白色 (#fff)</a-checkbox
-            >
-            <a-checkbox v-model:checked="options.preserveTransparent"
-              >保留透明色</a-checkbox
-            >
             <a-checkbox v-model:checked="options.modifyFilename"
               >修改文件名 (添加 -cleaned 后缀)</a-checkbox
             >

@@ -154,7 +154,7 @@ watch(() => props.src, (newSrc) => {
 // 监听弹窗可见性变化
 watch(() => props.modelValue, (newVal) => {
   if (newVal) {
-    zoomLevel.value = 1.5; // 打开时初始化为150%
+    zoomLevel.value = 3.0; // 打开时初始化为300%
   } else {
     zoomLevel.value = 1; // 关闭时重置缩放级别
     displayMode.value = 'view'; // 关闭时重置为视图模式
@@ -167,11 +167,11 @@ const toggleDisplayMode = () => {
 };
 
 // 放大
-const zoomIn = () => {
-  // 使用更精确的计算，确保能达到150%
-  const newZoomLevel = zoomLevel.value + 0.1;
-  zoomLevel.value = Math.min(Math.round(newZoomLevel * 10) / 10, 1.5);
-};
+  const zoomIn = () => {
+    // 使用更精确的计算，确保能达到300%
+    const newZoomLevel = zoomLevel.value + 0.1;
+    zoomLevel.value = Math.min(Math.round(newZoomLevel * 10) / 10, 3.0);
+  };
 
 // 缩小
 const zoomOut = () => {
@@ -181,28 +181,28 @@ const zoomOut = () => {
 };
 
 // 重置缩放
-const resetZoom = () => {
-  zoomLevel.value = 1.5; // 初始化时放大到150%
-};
+  const resetZoom = () => {
+    zoomLevel.value = 3.0; // 初始化时放大到300%
+  };
 
 // 处理鼠标滚轮缩放
-const handleWheelZoom = (event) => {
-  const delta = event.deltaY > 0 ? -0.1 : 0.1; // 提高灵敏度
-  const newZoomLevel = zoomLevel.value + delta;
-  
-  // 限制缩放范围：最小50%，最大150%
-  const clampedZoom = Math.max(0.5, Math.min(newZoomLevel, 1.5));
-  zoomLevel.value = Math.round(clampedZoom * 10) / 10; // 确保只有一位小数
-};
+  const handleWheelZoom = (event) => {
+    const delta = event.deltaY > 0 ? -0.1 : 0.1; // 提高灵敏度
+    const newZoomLevel = zoomLevel.value + delta;
+    
+    // 限制缩放范围：最小50%，最大300%
+    const clampedZoom = Math.max(0.5, Math.min(newZoomLevel, 3.0));
+    zoomLevel.value = Math.round(clampedZoom * 10) / 10; // 确保只有一位小数
+  };
 
 // 处理模态框打开关闭
-const handleModalOpenChange = (open) => {
-  if (!open) {
-    zoomLevel.value = 1; // 关闭时重置缩放级别
-    displayMode.value = 'view'; // 关闭时重置为视图模式
-    emit('update:modelValue', false);
-  }
-};
+  const handleModalOpenChange = (open) => {
+    if (!open) {
+      zoomLevel.value = 1; // 关闭时重置缩放级别
+      displayMode.value = 'view'; // 关闭时重置为视图模式
+      emit('update:modelValue', false);
+    }
+  };
 
 // 复制SVG源码
 const copySvgSource = () => {

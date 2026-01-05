@@ -1,13 +1,4 @@
-export function cleanSvgColors(svgContent, options = {}) {
-  const {
-    removeFill = true,
-    removeStroke = true,
-    removeColor = true,
-    preserveBlack = false,
-    preserveWhite = false,
-    preserveTransparent = false
-  } = options;
-
+export function cleanSvgColors(svgContent) {
   // 创建DOMParser实例
   const parser = new DOMParser();
   // 解析SVG字符串为DOM
@@ -21,32 +12,86 @@ export function cleanSvgColors(svgContent, options = {}) {
   
   // 遍历所有元素
   const elements = svgDoc.querySelectorAll('*');
+  
+  // 统计图标类型
+  let lineElementsCount = 0;
+  let solidElementsCount = 0;
+  
   elements.forEach(element => {
+    const tagName = element.tagName.toLowerCase();
+    // 跳过clipPath等特殊元素
+    if (tagName === 'clippath' || tagName === 'clipPath' || tagName === 'defs' || tagName === 'style' || tagName === 'script') {
+      return;
+    }
+    
+    const hasStroke = element.hasAttribute('stroke');
+    const strokeValue = element.getAttribute('stroke')?.toLowerCase() || '';
+    const hasFill = element.hasAttribute('fill');
+    const fillValue = element.getAttribute('fill')?.toLowerCase() || '';
+    
+    // 判断元素类型
+    if (hasStroke && (fillValue === 'none' || !hasFill)) {
+      // 线性元素：有stroke且fill为none或无fill
+      lineElementsCount++;
+    } else if (hasFill && (strokeValue === 'none' || !hasStroke)) {
+      // 面性元素：有fill且stroke为none或无stroke
+      solidElementsCount++;
+    }
+  });
+  
+  // 确定图标类型
+  const isLineIcon = lineElementsCount > solidElementsCount;
+  
+  // 处理所有元素
+  elements.forEach(element => {
+    const tagName = element.tagName.toLowerCase();
+    
+    // 处理clipPath特殊情况
+    if (tagName === 'clippath' || tagName === 'clipPath') {
+      const rect = element.querySelector('rect');
+      if (rect) {
+        rect.removeAttribute('fill');
+      }
+      return;
+    }
+    
+    // 跳过defs、style、script等特殊元素
+    if (tagName === 'defs' || tagName === 'style' || tagName === 'script') {
+      return;
+    }
+    
     colorAttributes.forEach(attr => {
       if (element.hasAttribute(attr)) {
         const value = element.getAttribute(attr).toLowerCase();
         
-        // 检查是否需要保留特定颜色
-        let shouldPreserve = false;
-        // 总是保留none和transparent值，它们表示没有颜色
-        if (value === 'transparent' || value === 'none') {
-          shouldPreserve = true;
-        } else if (preserveBlack && (value === 'black' || value === '#000' || value === '#000000')) {
-          shouldPreserve = true;
-        } else if (preserveWhite && (value === 'white' || value === '#fff' || value === '#ffffff')) {
-          shouldPreserve = true;
-        }
-        
-        // 根据选项决定处理方式
-        if (!shouldPreserve) {
-          if (attr === 'fill' && removeFill) {
-            // 设置fill为currentColor而非移除
-            element.setAttribute(attr, 'currentColor');
-          } else if (attr === 'stroke' && removeStroke) {
-            // 设置stroke为currentColor而非移除
-            element.setAttribute(attr, 'currentColor');
-          } else if (attr === 'color' && removeColor) {
+        // 智能处理规则
+        if (isLineIcon) {
+          // 线性图标处理规则
+          if (attr === 'fill') {
+            // 确保fill="none"不变
+            if (value !== 'none') {
+              element.setAttribute(attr, 'none');
+            }
+          } else if (attr === 'stroke') {
+            // 总是将stroke="#xxx"替换为stroke="currentColor"
+            if (value !== 'none' && value !== 'currentcolor') {
+              element.setAttribute(attr, 'currentColor');
+            }
+          } else if (['stop-color', 'flood-color', 'lighting-color'].includes(attr)) {
             element.removeAttribute(attr);
+          }
+        } else {
+          // 面性图标处理规则
+          if (attr === 'fill') {
+            // 总是将fill="#xxx"替换为fill="currentColor"
+            if (value !== 'none' && value !== 'currentcolor') {
+              element.setAttribute(attr, 'currentColor');
+            }
+          } else if (attr === 'stroke') {
+            // 总是将stroke="#xxx"替换为stroke="currentColor"
+            if (value !== 'none' && value !== 'currentcolor') {
+              element.setAttribute(attr, 'currentColor');
+            }
           } else if (['stop-color', 'flood-color', 'lighting-color'].includes(attr)) {
             element.removeAttribute(attr);
           }
@@ -58,30 +103,6 @@ export function cleanSvgColors(svgContent, options = {}) {
   // 序列化回SVG字符串
   const serializer = new XMLSerializer();
   return serializer.serializeToString(svgDoc);
-}
-
-export function cleanSvgFile(filePath, options = {}) {
-  return new Promise((resolve, reject) => {
-    // 在浏览器环境中，我们使用FileReader API来读取文件
-    if (typeof window !== 'undefined' && window.FileReader) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const cleanedContent = cleanSvgColors(e.target.result, options);
-          resolve(cleanedContent);
-        } catch (error) {
-          reject(error);
-        }
-      };
-      reader.onerror = (error) => {
-        reject(error);
-      };
-      reader.readAsText(filePath);
-    } else {
-      // 在Node.js环境中，我们使用fs模块来读取文件
-      reject(new Error('File reading not supported in this environment'));
-    }
-  });
 }
 
 export function isValidSvg(content) {
