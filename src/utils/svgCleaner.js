@@ -50,12 +50,6 @@ export function cleanSvgColors(svgContent, options = {}) {
             element.removeAttribute(attr);
           }
         }
-      } else {
-        // 对于没有fill或stroke属性的元素，也可以考虑添加currentColor
-        if ((attr === 'fill' && removeFill) || (attr === 'stroke' && removeStroke)) {
-          // 只处理fill和stroke，不处理其他属性
-          element.setAttribute(attr, 'currentColor');
-        }
       }
     });
   });

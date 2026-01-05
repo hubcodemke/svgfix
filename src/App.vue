@@ -6,6 +6,7 @@ import { downloadDir } from "@tauri-apps/api/path";
 import { message } from "ant-design-vue";
 import DropZone from "./components/DropZone.vue";
 import FileList from "./components/FileList.vue";
+import { cleanSvgColors, isValidSvg } from "./utils/svgCleaner.js";
 
 // 弹窗状态
 const modalVisible = ref(false);
@@ -133,18 +134,6 @@ const handleFilesSelected = async (selectedFiles) => {
   // 如果是第一个文件，自动选中
   if (files.value.length === selectedFiles.length) {
     selectedFile.value = files.value[0];
-  }
-};
-
-// 验证SVG格式
-const isValidSvg = (content) => {
-  try {
-    // 简单的SVG验证：检查是否包含<svg>标签
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(content, "image/svg+xml");
-    return svgDoc.getElementsByTagName("svg").length > 0;
-  } catch (error) {
-    return false;
   }
 };
 
@@ -305,31 +294,6 @@ const downloadFile = async (fileItem) => {
     console.error("Error downloading file:", error);
     showMessage(`下载文件失败: ${error.message || "未知错误"}`, "error");
   }
-};
-
-// 清理SVG颜色
-const cleanSvgColors = (content, options) => {
-  let cleanedContent = content;
-
-  // 移除fill属性
-  if (options.removeFill) {
-    cleanedContent = cleanedContent.replace(/\sfill="[^"]*"/g, "");
-    cleanedContent = cleanedContent.replace(/\sfill='[^']*'/g, "");
-  }
-
-  // 移除stroke属性
-  if (options.removeStroke) {
-    cleanedContent = cleanedContent.replace(/\sstroke="[^"]*"/g, "");
-    cleanedContent = cleanedContent.replace(/\sstroke='[^']*'/g, "");
-  }
-
-  // 移除color属性
-  if (options.removeColor) {
-    cleanedContent = cleanedContent.replace(/\scolor="[^"]*"/g, "");
-    cleanedContent = cleanedContent.replace(/\scolor='[^']*'/g, "");
-  }
-
-  return cleanedContent;
 };
 
 // 批量下载文件
