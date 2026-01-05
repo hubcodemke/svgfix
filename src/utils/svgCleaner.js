@@ -28,11 +28,12 @@ export function cleanSvgColors(svgContent, options = {}) {
         
         // 检查是否需要保留特定颜色
         let shouldPreserve = false;
-        if (preserveBlack && (value === 'black' || value === '#000' || value === '#000000')) {
+        // 总是保留none和transparent值，它们表示没有颜色
+        if (value === 'transparent' || value === 'none') {
+          shouldPreserve = true;
+        } else if (preserveBlack && (value === 'black' || value === '#000' || value === '#000000')) {
           shouldPreserve = true;
         } else if (preserveWhite && (value === 'white' || value === '#fff' || value === '#ffffff')) {
-          shouldPreserve = true;
-        } else if (preserveTransparent && (value === 'transparent' || value === 'none')) {
           shouldPreserve = true;
         }
         
