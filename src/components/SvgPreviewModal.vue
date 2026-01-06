@@ -15,35 +15,65 @@
         <span v-if="!isSourceMode" class="zoom-info">缩放比例: {{ Math.round(zoomLevel * 100) }}%</span>
         
         <!-- 控制按钮 -->
-        <div class="control-buttons">
-          <!-- 缩放按钮只在视图模式显示 -->
-          <div v-if="!isSourceMode" class="zoom-buttons">
-            <a-button 
-              size="small" 
-              @click="zoomOut" 
-              :disabled="zoomLevel <= 0.5"
-              type="default"
-              style="min-width: 40px;"
-            >
-              - <!-- 使用文字替代图标 -->
-            </a-button>
-            <a-button 
-              size="small" 
-              @click="resetZoom"
-              type="default"
-            >
-              重置
-            </a-button>
-            <a-button 
-              size="small" 
-              @click="zoomIn" 
-              :disabled="zoomLevel >= 1.5"
-              type="default"
-              style="min-width: 40px;"
-            >
-              + <!-- 使用文字替代图标 -->
-            </a-button>
-          </div>
+          <div class="control-buttons">
+            <!-- 缩放按钮只在视图模式显示 -->
+            <div v-if="!isSourceMode" class="zoom-buttons">
+              <a-button 
+                size="small" 
+                @click="zoomOut" 
+                :disabled="zoomLevel <= 0.5"
+                type="default"
+                style="min-width: 40px;"
+              >
+                - <!-- 使用文字替代图标 -->
+              </a-button>
+              <a-button 
+                size="small" 
+                @click="resetZoom"
+                type="default"
+              >
+                重置
+              </a-button>
+              <a-button 
+                size="small" 
+                @click="zoomIn" 
+                :disabled="zoomLevel >= 1.5"
+                type="default"
+                style="min-width: 40px;"
+              >
+                + <!-- 使用文字替代图标 -->
+              </a-button>
+              <!-- 颜色选择器 -->
+              <div class="color-picker-container">
+                <a-button 
+                  size="small" 
+                  @click="showColorPicker = !showColorPicker"
+                  type="default"
+                  style="display: flex; align-items: center; gap: 4px;"
+                >
+                  <div 
+                    class="color-indicator"
+                    :style="{ backgroundColor: svgColor }"
+                  ></div>
+                  SVG颜色
+                </a-button>
+                <div v-if="showColorPicker" class="color-picker-popup">
+                  <input 
+                    type="color" 
+                    v-model="svgColor" 
+                    class="color-input"
+                    @input="updateSvgColor"
+                  />
+                  <a-button 
+                    size="small" 
+                    @click="clearSvgColor"
+                    type="default"
+                  >
+                    清空
+                  </a-button>
+                </div>
+              </div>
+            </div>
           
           <!-- 视图/源码切换按钮 -->
           <a-button 
@@ -75,12 +105,11 @@
           class="preview-img-container"
           @wheel.prevent="handleWheelZoom"
         >
-          <img 
-            :src="src" 
-            alt="SVG Preview" 
-            class="preview-modal-img"
+          <div 
+            ref="svgContainer"
+            class="preview-modal-svg"
             :style="{ transform: `scale(${zoomLevel})`, transition: 'transform 0.05s ease' }"
-          />
+          ></div>
         </div>
       </template>
       <template v-else>
@@ -125,6 +154,15 @@ const displayMode = ref('view');
 // SVG源码
 const svgSource = ref('');
 
+// SVG内联元素引用
+const svgContainer = ref(null);
+
+// SVG颜色状态
+const svgColor = ref('#000000');
+
+// 颜色选择状态
+const showColorPicker = ref(false);
+
 // 计算属性：是否为源码模式
 const isSourceMode = computed(() => displayMode.value === 'source');
 
@@ -135,15 +173,85 @@ const parseSvgSource = (src) => {
       // 从Data URL中提取编码的SVG内容
       const encodedSvg = src.replace('data:image/svg+xml;utf8,', '');
       // 解码SVG内容
-      svgSource.value = decodeURIComponent(encodedSvg);
+      const decodedSvg = decodeURIComponent(encodedSvg);
+      svgSource.value = decodedSvg;
+      renderInlineSvg(decodedSvg);
     } else {
       // 如果不是Data URL，尝试直接使用（可能是其他格式，这里做简单处理）
       svgSource.value = src;
+      renderInlineSvg(src);
     }
   } catch (error) {
     console.error('解析SVG源码时出错:', error);
     svgSource.value = '解析SVG源码失败，请检查文件格式';
   }
+};
+
+// 渲染内联SVG
+const renderInlineSvg = (svgContent) => {
+  if (svgContainer.value) {
+    svgContainer.value.innerHTML = svgContent;
+    updateSvgColor();
+  }
+};
+
+// 更新SVG颜色
+const updateSvgColor = () => {
+  if (svgContainer.value) {
+    const svgElement = svgContainer.value.querySelector('svg');
+    if (svgElement) {
+      // 查找所有需要改变颜色的元素
+      const elements = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline, ellipse, g');
+      elements.forEach(element => {
+        // 保存原始颜色（如果还没有保存）
+        if (!element.dataset.originalFill) {
+          element.dataset.originalFill = element.getAttribute('fill') || '';
+        }
+        if (!element.dataset.originalStroke) {
+          element.dataset.originalStroke = element.getAttribute('stroke') || '';
+        }
+        
+        // 只修改有颜色的元素或黑色元素
+        if (element.dataset.originalFill && element.dataset.originalFill !== 'none') {
+          element.setAttribute('fill', svgColor.value);
+        }
+        if (element.dataset.originalStroke && element.dataset.originalStroke !== 'none') {
+          element.setAttribute('stroke', svgColor.value);
+        }
+      });
+    }
+  }
+};
+
+// 清空SVG颜色，恢复原始颜色
+const clearSvgColor = () => {
+  if (svgContainer.value) {
+    const svgElement = svgContainer.value.querySelector('svg');
+    if (svgElement) {
+      // 查找所有需要恢复颜色的元素
+      const elements = svgElement.querySelectorAll('path, circle, rect, line, polygon, polyline, ellipse, g');
+      elements.forEach(element => {
+        // 恢复原始填充色
+        if (element.dataset.originalFill !== undefined) {
+          if (element.dataset.originalFill === '') {
+            element.removeAttribute('fill');
+          } else {
+            element.setAttribute('fill', element.dataset.originalFill);
+          }
+        }
+        // 恢复原始描边色
+        if (element.dataset.originalStroke !== undefined) {
+          if (element.dataset.originalStroke === '') {
+            element.removeAttribute('stroke');
+          } else {
+            element.setAttribute('stroke', element.dataset.originalStroke);
+          }
+        }
+      });
+    }
+  }
+  // 重置颜色状态为默认值
+  svgColor.value = '#000000';
 };
 
 // 监听src变化，解析SVG源码
@@ -326,15 +434,85 @@ const fallbackCopyTextToClipboard = (text) => {
   cursor: grabbing;
 }
 
-/* 预览图片样式 */
-.preview-modal-img {
+/* 预览SVG样式 */
+.preview-modal-svg {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+  transition: transform 0.1s ease;
+}
+
+.preview-modal-svg svg {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  transform-origin: center center;
-  transition: transform 0.1s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   border-radius: 4px;
+}
+
+/* 颜色选择器样式 */
+.color-picker-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.color-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid #d9d9d9;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.color-picker-popup {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-input {
+  width: 40px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 0;
+  border-radius: 4px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* 深色主题适配 - 颜色选择器 */
+@media (prefers-color-scheme: dark) {
+  .color-picker-popup {
+    background: #334155;
+  }
+  
+  .color-indicator {
+    border-color: #64748b;
+  }
 }
 
 /* 源码视图容器样式 */
