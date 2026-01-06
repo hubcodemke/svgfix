@@ -1,4 +1,4 @@
-name: Build and Sign with Sigstore (Stable v2.2.4)
+name: Build and Sign with Sigstore (Stable v2.2.4 + Auto Confirm)
 
 on:
   workflow_dispatch:
@@ -53,15 +53,16 @@ jobs:
           echo "exe_name=$($file.Name)" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      - name: Download cosign v2.2.4 (stable, no new bundle)
+      - name: Download cosign v2.2.4
         run: |
           Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-windows-amd64.exe" -OutFile cosign.exe
 
-      - name: Sign EXE with Sigstore (old format)
+      - name: Sign EXE with Sigstore (auto-confirm)
         run: |
           ./cosign.exe sign-blob `
             --output-signature "${{ steps.find_exe.outputs.exe_name }}.sig" `
             --output-certificate "${{ steps.find_exe.outputs.exe_name }}.pem" `
+            --yes `
             "${{ steps.find_exe.outputs.exe_path }}"
 
       - name: Upload Windows artifacts
@@ -113,17 +114,18 @@ jobs:
           echo "dmg_name=$(basename "$FILE")" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Download cosign v2.2.4 (stable, macOS)
+      - name: Download cosign v2.2.4
         run: |
           curl -LO https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-darwin-amd64
           mv cosign-darwin-amd64 cosign
           chmod +x cosign
 
-      - name: Sign DMG with Sigstore (old format)
+      - name: Sign DMG with Sigstore (auto-confirm)
         run: |
           ./cosign sign-blob \
             --output-signature "${{ steps.find_dmg.outputs.dmg_name }}.sig" \
             --output-certificate "${{ steps.find_dmg.outputs.dmg_name }}.pem" \
+            --yes \
             "${{ steps.find_dmg.outputs.dmg_path }}"
 
       - name: Upload macOS artifacts
