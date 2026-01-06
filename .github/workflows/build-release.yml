@@ -1,4 +1,4 @@
-name: Build and Sign with Sigstore (Windows + macOS)
+name: Build and Sign with Sigstore (Stable v2.2.4)
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     permissions:
-      id-token: write  # 必需：启用 GitHub OIDC for Sigstore
+      id-token: write
       contents: read
     outputs:
       version: ${{ steps.get_version.outputs.version }}
@@ -53,19 +53,17 @@ jobs:
           echo "exe_name=$($file.Name)" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      - name: Download cosign
+      - name: Download cosign v2.2.4 (stable)
         run: |
-          Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/latest/download/cosign-windows-amd64.exe" -OutFile cosign.exe
+          Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-windows-amd64.exe" -OutFile cosign.exe
 
-      - name: Sign EXE with Sigstore (absolute path fix)
-        id: sign_exe
+      - name: Sign EXE with Sigstore (old format, stable)
         run: |
-          $exePath = "${{ steps.find_exe.outputs.exe_path }}"
-          $exeName = "${{ steps.find_exe.outputs.exe_name }}"
-          $sigstorePath = Join-Path -Path $PWD -ChildPath "$exeName.sigstore"
-          ./cosign.exe sign-blob --output-file $sigstorePath $exePath
-          echo "sigstore_path=$sigstorePath" >> $env:GITHUB_OUTPUT
-        shell: pwsh
+          ./cosign.exe sign-blob `
+            --output-signature "${{ steps.find_exe.outputs.exe_name }}.sig" `
+            --output-certificate "${{ steps.find_exe.outputs.exe_name }}.pem" `
+            --no-new-bundle-format `
+            "${{ steps.find_exe.outputs.exe_path }}"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -73,12 +71,13 @@ jobs:
           name: windows-installer
           path: |
             ${{ steps.find_exe.outputs.exe_path }}
-            ${{ steps.sign_exe.outputs.sigstore_path }}
+            ${{ steps.find_exe.outputs.exe_name }}.sig
+            ${{ steps.find_exe.outputs.exe_name }}.pem
 
   build-macos:
     runs-on: macos-latest
     permissions:
-      id-token: write  # 必需：启用 GitHub OIDC for Sigstore
+      id-token: write
       contents: read
     steps:
       - name: Checkout code
@@ -115,16 +114,19 @@ jobs:
           echo "dmg_name=$(basename "$FILE")" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Install cosign
-        run: brew install cosign
-
-      - name: Sign DMG with Sigstore (absolute path)
-        id: sign_dmg
+      - name: Download cosign v2.2.4 (stable)
         run: |
-          OUTPUT="$PWD/${{ steps.find_dmg.outputs.dmg_name }}.sigstore"
-          cosign sign-blob --output-file "$OUTPUT" "${{ steps.find_dmg.outputs.dmg_path }}"
-          echo "sigstore_path=$OUTPUT" >> $GITHUB_OUTPUT
-        shell: bash
+          curl -LO https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-darwin-amd64
+          mv cosign-darwin-amd64 cosign
+          chmod +x cosign
+
+      - name: Sign DMG with Sigstore (old format, stable)
+        run: |
+          ./cosign sign-blob \
+            --output-signature "${{ steps.find_dmg.outputs.dmg_name }}.sig" \
+            --output-certificate "${{ steps.find_dmg.outputs.dmg_name }}.pem" \
+            --no-new-bundle-format \
+            "${{ steps.find_dmg.outputs.dmg_path }}"
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -132,7 +134,8 @@ jobs:
           name: macos-dmg
           path: |
             ${{ steps.find_dmg.outputs.dmg_path }}
-            ${{ steps.sign_dmg.outputs.sigstore_path }}
+            ${{ steps.find_dmg.outputs.dmg_name }}.sig
+            ${{ steps.find_dmg.outputs.dmg_name }}.pem
 
   release:
     needs: [build-windows, build-macos]
@@ -160,6 +163,8 @@ jobs:
           prerelease: false
           files: |
             release-assets/*.exe
-            release-assets/*.exe.sigstore
+            release-assets/*.exe.sig
+            release-assets/*.exe.pem
             release-assets/*.dmg
-            release-assets/*.dmg.sigstore
+            release-assets/*.dmg.sig
+            release-assets/*.dmg.pem
