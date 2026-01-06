@@ -151,21 +151,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download all artifacts
+      - name: Download Windows installer artifact
         uses: actions/download-artifact@v4
         with:
-          path: bundles
+          name: windows-installer
+          path: release-assets
 
-      - name: Create release directory
-        run: |
-          mkdir -p release-assets
-          # Copy Windows files
-          cp bundles/windows-installer/* release-assets/ 2>/dev/null || true
-          # Copy macOS files
-          cp bundles/macos-dmg/* release-assets/ 2>/dev/null || true
+      - name: Download macOS DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-dmg
+          path: release-assets
 
       - name: List release assets (debug)
-        run: ls -la release-assets/
+        run: ls -la release-assets/ && echo "---"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -175,9 +174,4 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/*.exe
-            release-assets/*.exe.sig
-            release-assets/*.exe.pem
-            release-assets/*.dmg
-            release-assets/*.dmg.sig
-            release-assets/*.dmg.pem
+            release-assets/*
