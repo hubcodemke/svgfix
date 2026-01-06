@@ -6,6 +6,9 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
+    permissions:
+      id-token: write  # 用于 Sigstore Keyless 签名
+      contents: read
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
@@ -50,7 +53,6 @@ jobs:
           echo "exe_name=$($file.Name)" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
-      # 🔑 下载 cosign 并签名
       - name: Download cosign
         run: |
           Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/latest/download/cosign-windows-amd64.exe" -OutFile cosign.exe
@@ -60,12 +62,9 @@ jobs:
           ./cosign.exe sign-blob `
             --output-signature "${{ steps.find_exe.outputs.exe_name }}.sig" `
             --output-certificate "${{ steps.find_exe.outputs.exe_name }}.pem" `
-            --oidc-disable-ambient-providers `
-            --oidc-client-id "sigstore" `
-            --oidc-issuer "https://oauth2.sigstore.dev/auth" `
             "${{ steps.find_exe.outputs.exe_path }}"
 
-      - name: Upload Windows artifacts (exe + sig + pem)
+      - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -76,6 +75,9 @@ jobs:
 
   build-macos:
     runs-on: macos-latest
+    permissions:
+      id-token: write  # 用于 Sigstore Keyless 签名
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -111,22 +113,17 @@ jobs:
           echo "dmg_name=$(basename "$FILE")" >> $GITHUB_OUTPUT
         shell: bash
 
-      # 🔑 安装并使用 cosign (macOS)
       - name: Install cosign
-        run: |
-          brew install cosign
+        run: brew install cosign
 
       - name: Sign DMG with Sigstore
         run: |
           cosign sign-blob \
             --output-signature "${{ steps.find_dmg.outputs.dmg_name }}.sig" \
             --output-certificate "${{ steps.find_dmg.outputs.dmg_name }}.pem" \
-            --oidc-disable-ambient-providers \
-            --oidc-client-id "sigstore" \
-            --oidc-issuer "https://oauth2.sigstore.dev/auth" \
             "${{ steps.find_dmg.outputs.dmg_path }}"
 
-      - name: Upload macOS artifacts (dmg + sig + pem)
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
@@ -146,11 +143,11 @@ jobs:
         with:
           path: bundles
 
-      - name: Flatten directory structure (optional, for clean release)
+      - name: Create clean release directory
         run: |
           mkdir -p release-assets
-          cp bundles/windows-installer/* release-assets/
-          cp bundles/macos-dmg/* release-assets/
+          cp bundles/windows-installer/* release-assets/ 2>/dev/null || true
+          cp bundles/macos-dmg/* release-assets/ 2>/dev/null || true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
