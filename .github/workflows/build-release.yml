@@ -57,6 +57,15 @@ jobs:
           echo "exe_name=$($file.Name)" >> $env:GITHUB_OUTPUT
         shell: pwsh
 
+      - name: Prepare upload directory
+        run: mkdir -p upload-dir
+        shell: bash
+
+      - name: Copy EXE to upload directory
+        run: |
+          Copy-Item -Path "${{ steps.find_executable.outputs.exe_path }}" -Destination upload-dir\
+        shell: pwsh
+
       - name: Download cosign v2.2.4
         run: |
           Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-windows-amd64.exe" -OutFile cosign.exe
@@ -64,8 +73,8 @@ jobs:
       - name: Sign EXE with Sigstore
         run: |
           ./cosign.exe sign-blob `
-            --output-signature "${{ steps.find_executable.outputs.exe_name }}.sig" `
-            --output-certificate "${{ steps.find_executable.outputs.exe_name }}.pem" `
+            --output-signature "upload-dir/${{ steps.find_executable.outputs.exe_name }}.sig" `
+            --output-certificate "upload-dir/${{ steps.find_executable.outputs.exe_name }}.pem" `
             --yes `
             "${{ steps.find_executable.outputs.exe_path }}"
 
@@ -73,10 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: |
-            ${{ steps.find_executable.outputs.exe_path }}
-            ${{ steps.find_executable.outputs.exe_name }}.sig
-            ${{ steps.find_executable.outputs.exe_name }}.pem
+          path: upload-dir/*
 
   build-macos:
     runs-on: macos-latest
@@ -122,6 +128,13 @@ jobs:
           echo "dmg_name=$(basename "$FILE")" >> $GITHUB_OUTPUT
         shell: bash
 
+      - name: Prepare upload directory
+        run: mkdir -p upload-dir
+
+      - name: Copy DMG to upload directory
+        run: |
+          cp "${{ steps.find_dmg.outputs.dmg_path }}" upload-dir/
+
       - name: Download cosign v2.2.4
         run: |
           curl -LO https://github.com/sigstore/cosign/releases/download/v2.2.4/cosign-darwin-amd64
@@ -131,8 +144,8 @@ jobs:
       - name: Sign DMG with Sigstore
         run: |
           ./cosign sign-blob \
-            --output-signature "${{ steps.find_dmg.outputs.dmg_name }}.sig" \
-            --output-certificate "${{ steps.find_dmg.outputs.dmg_name }}.pem" \
+            --output-signature "upload-dir/${{ steps.find_dmg.outputs.dmg_name }}.sig" \
+            --output-certificate "upload-dir/${{ steps.find_dmg.outputs.dmg_name }}.pem" \
             --yes \
             "${{ steps.find_dmg.outputs.dmg_path }}"
 
@@ -140,10 +153,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: |
-            ${{ steps.find_dmg.outputs.dmg_path }}
-            ${{ steps.find_dmg.outputs.dmg_name }}.sig
-            ${{ steps.find_dmg.outputs.dmg_name }}.pem
+          path: upload-dir/*
 
   release:
     needs: [build-windows, build-macos]
