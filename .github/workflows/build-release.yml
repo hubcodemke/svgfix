@@ -7,7 +7,7 @@ jobs:
   build-windows:
     runs-on: windows-latest
     permissions:
-      id-token: write  # 必需：用于 Sigstore Keyless 签名
+      id-token: write  # 必需：启用 GitHub OIDC for Sigstore
       contents: read
     outputs:
       version: ${{ steps.get_version.outputs.version }}
@@ -57,11 +57,15 @@ jobs:
         run: |
           Invoke-WebRequest -Uri "https://github.com/sigstore/cosign/releases/latest/download/cosign-windows-amd64.exe" -OutFile cosign.exe
 
-      - name: Sign EXE with Sigstore (new bundle format)
+      - name: Sign EXE with Sigstore (absolute path fix)
+        id: sign_exe
         run: |
-          ./cosign.exe sign-blob `
-            --output-file "${{ steps.find_exe.outputs.exe_name }}.sigstore" `
-            "${{ steps.find_exe.outputs.exe_path }}"
+          $exePath = "${{ steps.find_exe.outputs.exe_path }}"
+          $exeName = "${{ steps.find_exe.outputs.exe_name }}"
+          $sigstorePath = Join-Path -Path $PWD -ChildPath "$exeName.sigstore"
+          ./cosign.exe sign-blob --output-file $sigstorePath $exePath
+          echo "sigstore_path=$sigstorePath" >> $env:GITHUB_OUTPUT
+        shell: pwsh
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -69,12 +73,12 @@ jobs:
           name: windows-installer
           path: |
             ${{ steps.find_exe.outputs.exe_path }}
-            ${{ steps.find_exe.outputs.exe_name }}.sigstore
+            ${{ steps.sign_exe.outputs.sigstore_path }}
 
   build-macos:
     runs-on: macos-latest
     permissions:
-      id-token: write  # 必需：用于 Sigstore Keyless 签名
+      id-token: write  # 必需：启用 GitHub OIDC for Sigstore
       contents: read
     steps:
       - name: Checkout code
@@ -114,11 +118,13 @@ jobs:
       - name: Install cosign
         run: brew install cosign
 
-      - name: Sign DMG with Sigstore (new bundle format)
+      - name: Sign DMG with Sigstore (absolute path)
+        id: sign_dmg
         run: |
-          cosign sign-blob \
-            --output-file "${{ steps.find_dmg.outputs.dmg_name }}.sigstore" \
-            "${{ steps.find_dmg.outputs.dmg_path }}"
+          OUTPUT="$PWD/${{ steps.find_dmg.outputs.dmg_name }}.sigstore"
+          cosign sign-blob --output-file "$OUTPUT" "${{ steps.find_dmg.outputs.dmg_path }}"
+          echo "sigstore_path=$OUTPUT" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -126,7 +132,7 @@ jobs:
           name: macos-dmg
           path: |
             ${{ steps.find_dmg.outputs.dmg_path }}
-            ${{ steps.find_dmg.outputs.dmg_name }}.sigstore
+            ${{ steps.sign_dmg.outputs.sigstore_path }}
 
   release:
     needs: [build-windows, build-macos]
